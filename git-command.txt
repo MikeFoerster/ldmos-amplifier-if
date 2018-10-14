@@ -1,3 +1,5 @@
+#My files are in:  https://github.com/MikeFoerster/ldmos-amplifier-if
+
 # add all changed files to staging
 git add .
 
@@ -18,3 +20,31 @@ git log
 # see changes
 git diff
 
+# get back to your last commit (you screwed up, Lose all changes).  One commit back!
+git reset --hard
+
+#  Compare what we have now, with what we had in some previous commit:
+git log  #to see previous changes, and copy the "hash" (long unique identifier) from the previous commit.
+#do a diff:
+gid diff [long identified pasted here]
+   #Will show all file differences...
+
+# Want to get old code (complete)...
+move existing code to a different dir.
+
+#Move the current code into a "happy place" (stored in a stash)
+git stash 
+   #will store all current files in a buffer
+
+#find your previous point
+git log
+
+#copy the hash line from that commit:
+git checkout [hash line you want]
+
+#Now do what you want for compares...
+# to get back:
+git stash apply
+  
+  #will delete old files and restore files
+ 
