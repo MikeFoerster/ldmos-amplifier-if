@@ -55,6 +55,8 @@
 
      Left
      Right
+
+     NEED to Verify All Specifications.
 */
 
 #define  VERSION_ID  F("LDMOS 8-2018 1.8" )
