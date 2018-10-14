@@ -1,0 +1,20 @@
+# add all changed files to staging
+git add .
+
+# commit all files in staging area
+git commit
+
+# push all changes to github
+git push
+
+
+### Utility Commands
+# see the status of your repo
+git status
+
+# see your commit log
+git log
+
+# see changes
+git diff
+
