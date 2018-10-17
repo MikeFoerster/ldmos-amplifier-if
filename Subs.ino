@@ -8,6 +8,7 @@ void SubOff(byte &RigModel, byte RigPortNumber, byte &bHours, byte &bMinutes, bo
   //Auto-Detect Mode: Monitor for Power Up Switch indication using Voltage?
 
   //For the K3, Re-enable the KPA3 internal amplifier.
+  //  We only go through this once!!!
   if (RigModel == 1) {
     //Turn the K3 Internal Amp Back ON.
     if (K3AmpOnOff(RigPortNumber, true)) {
@@ -131,12 +132,22 @@ void SubSwrError(bool &SwrFailMessage, bool &Act_Byp) {
 void SubSwrErrorReset(int &CurrentBand, byte &Mode, bool &Act_Byp, byte &RigPortNumber, byte &RigModel) {
   //User pressed the Select button
   // Cycle the Power
-  Serial.println(F("OffRoutine from Loop-ModeSwrErrorReset"));
+  //Serial.println(F("OffRoutine from Loop-ModeSwrErrorReset"));
   OffRoutine(CurrentBand, Mode);
   Act_Byp = 0;
   Bypass(Act_Byp);  //Make sure we are in Bypass mode.
   delay(7000);  //Wait 7 seconds
-  PowerUpRoutine(CurrentBand, RigPortNumber, RigModel, Act_Byp);
+  byte PowerUpResponse = PowerUpRoutine(CurrentBand, RigPortNumber, RigModel, Act_Byp);
+  if (PowerUpResponse == 1) {
+        //FAILED, Didn't establish Comms again:
+        lcd.setCursor(0, 1);
+        lcd.print("No Comm with Rig");
+        delay(2000);
+        //Turn the Mode back off...
+        Mode = ModeOff;
+        return;
+  }
+  
   //Finally, change the mode to Receive.
   Mode = ModeReceive;  //?? Is there something else that should change the Mode to Receive?????
 }

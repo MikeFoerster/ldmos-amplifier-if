@@ -1,8 +1,7 @@
 
-void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float &Volts) {
+void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float &Volts, byte &Mode) {
   //Check for Mode Changes & update TransmitLED and Voltmeter...
-
-  OverTemp = digitalRead(OverTempLedPin);
+    OverTemp = digitalRead(OverTempLedPin);
   //Serial.print(F("OverTemp Status = ")); Serial.println(OverTemp);
   //OverTemp
   if ((OverTemp == false) && (Mode != ModeOverTemp)) {
@@ -76,28 +75,34 @@ float CalculateSwr(float FwdPower, float RefPower) {
 float ReadVoltage(bool OneOnly) {
   //Returns Average Voltage
   // or if OneOnly, returns instantanious Voltage.
-  static float Volts[10];
+  static float Volts[5];
   static int Index;
 
   //Take the Voltage Reading:
   int Counts = analogRead(A0);
-  if (OneOnly) return Counts / 16.94;
-
-  //If OneOnly is 0, then average the readings:
-  float Average;
-
-  Volts[Index] = Counts / 16.94;
-  if (Index < 10) Index += 1;
-  else Index = 0;
-
-  for (int i = 0; i < 10; i++) {
-    Average = Average + Volts[i];
-  }
-  Average = Average / 10;
-
-  //Serial.print(F("Counts counts reads: ")); Serial.println(Counts);
-  //Serial.print(F("Calculated Volts reads: ")); Serial.println(Counts / 16.94);
-  return Average;
+  return (float(Counts) / 16.94);
+  //Two Problems:
+  //1. Running the "Counts / 16.94" was changing the RigPortNumber from 1 to 66, Can't figure out why!!!
+  //2. Averaging eliminates some bobble, but makes the Metering of voltage less accurate!
+  
+//  if (OneOnly) return Counts / 16.94;
+//
+//  //If OneOnly is 0, then average the readings:
+//  float Average;
+//
+//  //Anytime I include this next line, it Messes up my loop() RigPortNumber variable!!!
+//  //Volts[Index] = (float(Counts) / 16.94);
+//  if (Index < 5) Index += 1;
+//  else Index = 0;
+//
+//  for (int i = 0; i < 5; i++) {
+//    Average = Average + Volts[i];
+//  }
+//  Average = Average / 5;
+//
+//  //Serial.print(F("Counts counts reads: ")); Serial.println(Counts);
+//  //Serial.print(F("Calculated Volts reads: ")); Serial.println(Counts / 16.94);
+//  return Average;
 }
 
 double ReadAmpTemp() {
@@ -178,3 +183,10 @@ double Thermistor(int RawADC, bool Internal) {
   Temp = (Temp * 9.0) / 5.0 + 32.0; // Convert to Fahrenheit
   return Temp;  // Return the Temperature
 }
+
+void Bypass(bool State) {
+  //Toggle the Bypass mode Off or On;
+  if (State == false) digitalWrite(ActBypSwitchPin, OFF);
+  else digitalWrite(ActBypSwitchPin, ON);
+}
+

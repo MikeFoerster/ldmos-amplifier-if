@@ -5,7 +5,7 @@
 byte GetRigModel(byte RigPortNumber) {
 
   String Model = RadioCommandResponse("OM;", RigPortNumber);
-  Serial.print(F("  Model Read as: ")); Serial.println(Model);
+  //Serial.print(F("  Model Read as: ")); Serial.println(Model);
   if (Model.indexOf("X") > -1) {
     int Xval = Model.indexOf("X");
     //Serial.print(F("X position = ")); Serial.println(Xval);
@@ -17,7 +17,7 @@ byte GetRigModel(byte RigPortNumber) {
     return 2;
   }
   else {
-    Serial.println(F("Model Not Identified"));
+    //Serial.println(F("Model Not Identified"));
     return 0;
   }
 }
@@ -69,7 +69,7 @@ unsigned int ReadTheFrequency(byte RigPortNumber) {
 unsigned int ReadThePower(byte RigPortNumber) {
   String Power = RadioCommandResponse("PC;", RigPortNumber);
 
-  //Serial.print(F("  iPower Read as: ")); Serial.println(Power);
+  Serial.print(F("  String Power Read as: ")); Serial.println(Power);
   //Convert the Power Reading to an Integer:
   unsigned int iPower = Power.substring(3, 5).toInt();
 
@@ -77,7 +77,7 @@ unsigned int ReadThePower(byte RigPortNumber) {
 }
 
 bool SetTunePower(byte TuneValue, byte RigPortNumber) {
-  //Returns true if it fails
+  //Returns true on failure
   //Set Menu Command for Tune Power
   String Menu = RadioCommandResponse("MN058;", RigPortNumber);
   //Serial.print(F("  Menu Command Read as: ")); Serial.println(Menu);
@@ -107,9 +107,8 @@ bool SetTunePower(byte TuneValue, byte RigPortNumber) {
   else return false;
 }
 
-
-
 bool SetThePower(byte PowerValue, byte RigPortNumber) {
+  //Returns true on failure.
   String CommandResponse;
   //Serial.print(F("  Setting Power to: ")); Serial.println(PowerValue);
 
@@ -120,8 +119,15 @@ bool SetThePower(byte PowerValue, byte RigPortNumber) {
     RadioCommandResponse("PC0" + String(PowerValue), RigPortNumber);
   }
 
-  delay(25);
+  delay(50);
   CommandResponse = RadioCommandResponse("PC;", RigPortNumber);
+  if (CommandResponse == "") {
+    //I have no idea what happened!!! This used to work, but now, it takes a second try!!!
+    delay(50);
+    //Serial.println(F("Second Try:"));
+    CommandResponse = RadioCommandResponse("PC;", RigPortNumber);
+  }
+  //Serial.print(F("  CommandResponse : ")); Serial.println(CommandResponse);
   int iPowerResponse = CommandResponse.substring(2, 14).toInt();
   //Serial.print(F("  Power Set To: ")); Serial.println(CommandResponse);
   //Serial.print(F("  Power VALUE Set To: ")); Serial.println(iPowerResponse);
@@ -138,8 +144,8 @@ String RadioCommandResponse(String InputCommand, byte PortNumber) {
   char character;
   String Response = "";
 
-  //Serial.print(F("  Port = ")); Serial.println(PortNumber);
-  //Serial.print(F("  Sending = ")); Serial.println(InputCommand);
+  //Serial.print(F("1  Port = ")); Serial.println(PortNumber);
+  //Serial.print(F("2  Sending = ")); Serial.println(InputCommand);
 
   if (PortNumber == 1) {
     Serial1.print(InputCommand);
@@ -153,16 +159,10 @@ String RadioCommandResponse(String InputCommand, byte PortNumber) {
       delay(5);  //changed from 5 to 10
       //Serial.print(Response);
     }
-    //#ifdef DEBUG
-    //Serial.print(F("  RadioCommandResponse = ")); Serial.println(Response);
-    //#endif
-    //Serial1.end();
-    //Serial1.begin(38400);
     return Response;
   }
   else if (PortNumber == 2) {
     Serial2.print(InputCommand);
-    //Serial2.flush();  //wait for the command to go out before trying to read
 
     delay(25);
     while (Serial2.available())  {
@@ -170,11 +170,7 @@ String RadioCommandResponse(String InputCommand, byte PortNumber) {
       Response.concat(character);
       delay(5);
     }
-    //#ifdef DEBUG
-    //Serial.print(F("  RadioCommandResponse = ")); Serial.println(Response);
-    //#endif
-    //Serial2.end();
-    //Serial2.begin(38400);
+    //Serial.print(F("4  RadioCommandResponse = ")); Serial.println(Response);
     return Response;
   }
 }

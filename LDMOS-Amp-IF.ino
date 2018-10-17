@@ -59,7 +59,7 @@
      NEED to Verify All Specifications.
 */
 
-#define  VERSION_ID  F("LDMOS 8-2018 1.8" )
+#define  VERSION_ID  F("LDMOS 8-2018 1.9" )
 
 #define DEBUG
 #include <EEPROM.h>
@@ -72,9 +72,6 @@
 // However, you can connect other I2C sensors to the I2C bus and share
 // the I2C bus.
 Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
-//#define WHITE 0x7
-
-
 
 // Set a value for the different Bands, NOTE that this is ALSO the Eeprom read/write value for each band to set the Power Value.
 const int i160m = 0;
@@ -97,7 +94,7 @@ const int OFF = 1;
 const int ON = 0;
 
 //Reserve Pins 0 and 1 For Comms
-// Reserver Pint 2 for Interrupt
+// Reserver Pin 2 for Interrupt
 const int iFanPwmPin = 3;
 const int PowerSwitchPin = 4;  //Output
 const int ActBypSwitchPin = 5; //Output
@@ -120,37 +117,27 @@ const int ReflectedInputPin = A2;
 const int TempReadout = A3;
 const int TempInternal = A4;
 
+//byte Mode;
+  // 0 is used to know we just went through Setup(), loop() resets to "ModeOff" on startup.
+const byte ModeOff = 1;
+const byte ModePowerTurnedOn = 2;  //Power was just turned on, need to initialize.
+const byte ModeSwrError = 3;     //Bypass mode until corrected, Power Cycle to Reset.
+const byte ModeSwrErrorReset = 4;  //User pressed button to reset Power from ModeSwrError.
+const byte ModeReceive = 5;        //Amp is ready to go, but not currently transmitting.
+const byte ModeTransmit = 6;  //Transmit Detected, Update FWD/REF SWR as well as voltage.
+const byte ModeOverTemp = 7;  //OverTemp is active, need to wait for Amp to Cool Down. Dictated by Amp Control board.
+const byte ModeSetupBandPower = 8; //We are in Setup Mode, Adjust Per-Band Power setting (to Eeprom)
+const byte ModeSetupPwrTimeout = 9; //We are in Setup Mode, adjust the Power Off Timeout.
+const byte ModeSetupBypOperMode = 10;  //Select if on Power Up if we start in Bypass or Amplify mode.
 
-byte Mode;
-const byte ModeOff = 0;
-const byte ModePowerTurnedOn = 1;  //Power was just turned on, need to initialize.
-const byte ModeSwrError = 2;     //Bypass mode until corrected
-const byte ModeSwrErrorReset = 3;  //User pressed button to reset Power.
-const byte ModeReceive = 4;        //Amp is ready to go, but not currently transmitting. Update Voltage.
-const byte ModeTransmit = 5;  //Transmit Detected, Update FWD/REF SWR as well as voltage.
-const byte ModeOverTemp = 6;  //OverTemp is active, need to wait for Amp to Cool Down.
-const byte ModeSetupBandPower = 7; //We are in Setup Mode, Adjust Per-Band Power setting (to Eeprom)
-const byte ModeSetupPwrTimeout = 8; //We are in Setup Mode, adjust the Power Off Timeout.
-const byte ModeSetupBypOperMode = 9;  //Select if on Power Up if we start in Bypass or Amplify mode.
+//Changes the speed of the Morse Code Error Indications.
+int tempo = 65;  
 
-int tempo = 60;  //Changes the speed of the Morse Code Error Indications.
-
+// SendMorse is used for Error indications
 //Declared here to allow for an optional "bool Repeat = default" argument (in the MorseCode file).
 void SendMorse(String CharsToSend, bool Repeat = 0);
 
-void QuickBeep() {
-  //Turn the Beeper On breifly:
-  digitalWrite(iBeeperPin, OFF);
-  delay(100);
-  digitalWrite(iBeeperPin, ON);
-}
 
-void LongBeep() {
-  //Turn the Beeper On breifly:
-  digitalWrite(iBeeperPin, OFF);
-  delay(300);
-  digitalWrite(iBeeperPin, ON);
-}
 /*
     ############### Setup Procedure ############################
 */
@@ -158,20 +145,21 @@ void setup() {
   // Monitor Comm Port Setup
   Serial.begin(115200);
 
-  // set the data rate for the SoftwareSerial port
+  // Set the data rate for Serial Port 1
   Serial1.begin(38400);
-
+  // And for Serial Port 2.
   Serial2.begin(38400);
 
   // set up the LCD's number of columns and rows:
   lcd.begin(16, 2);
 
+  //Write the Output values to keep them from toggling during Initialization.
   digitalWrite(iFanPwmPin, OFF);
   digitalWrite(PowerSwitchPin, OFF);
   digitalWrite(ActBypSwitchPin, OFF);
   digitalWrite(iBeeperPin, ON);
 
-  // initialize the digital pin as an output.
+  // Initialize the digital pin as an output.
   pinMode(iFanPwmPin, OUTPUT);
   pinMode(PowerSwitchPin, OUTPUT);
   pinMode(ActBypSwitchPin, OUTPUT);
@@ -181,7 +169,7 @@ void setup() {
   pinMode(OverTempLedPin, INPUT_PULLUP);
   pinMode(SwrFailLedPin, INPUT_PULLUP);
 
-  //Keep the output pins from toggling;
+  //Keep the output pins from toggling during Initialization
   digitalWrite(i80mBandPin, OFF);
   digitalWrite(i40mBandPin, OFF);
   digitalWrite(i20mBandPin, OFF);
@@ -193,12 +181,10 @@ void setup() {
   pinMode(i20mBandPin, OUTPUT);
   pinMode(i10mBandPin, OUTPUT);
   pinMode(i6mBandPin, OUTPUT);
-  //Start by setting the band to 160 (all relays off).
-  SetupBandOutput(i160m);
-
 
   //Don't need to declare the Analog Input pins.
 
+  //Display spash on startup.
   Serial.println(VERSION_ID);
   lcd.display();
   lcd.setBacklight(1);  //ON
@@ -206,16 +192,14 @@ void setup() {
   lcd.print(" W0IH LDMOS Amp ");
   lcd.setCursor(0, 1);
   lcd.print(VERSION_ID);
-  delay(2000);
-  lcd.setBacklight(0);
+  delay(2000);  //Leave it up 2 seconds.
+  lcd.setBacklight(0);  //Turn it off.
 
-  Mode = ModeOff;
   int CurrentBand = i160m;
-  Serial.println(F("OffRoutine from Setup"));
+  //Serial.println(F("OffRoutine from Setup"));
 
   //OffRoutine requires a Mode variable, create one:
   byte tmpMode = 0;
-
   //Use the OffRoutine to disable everything.
   OffRoutine(CurrentBand, tmpMode);
 
@@ -225,12 +209,6 @@ void setup() {
   }
 }
 
-
-void Bypass(bool State) {
-  //Toggle the Bypass mode Off or On;
-  if (State == false) digitalWrite(ActBypSwitchPin, OFF);
-  else digitalWrite(ActBypSwitchPin, ON);
-}
 
 /*
      ############### Main LOOP ############################
@@ -247,7 +225,6 @@ void loop() {
   bool OverTemp;
   bool SwrFail;
   bool SwrFailMessage;
-  String Error;
   bool PowerSwitch;
   static byte RigPortNumber;
   static unsigned long TemperatureReadTime;
@@ -262,10 +239,11 @@ void loop() {
   static unsigned long ulCommWait;
   static byte RigModel;  //0 = None, 1 = K3, 2 = KX3
   static bool FirstTransmit;
+  static byte Mode;
 
-  // Try just a 50 ms sleep...
-  delay(50);
-
+  //Startup:
+  if (Mode == 0) Mode = ModeOff;
+  
   if (Mode == ModeOff) {
     //Longer Delay
     delay(100);
@@ -303,7 +281,7 @@ void loop() {
     //  OverTemp will change Mode to ModeOverTemp
     //  SwrFail will change Mode to ModeSwrError
     //  TransmitIndication will change Mode to ModeTransmit or ModeReceive
-    StatusChecks(OverTemp, SwrFail, TransmitIndication, Volts);
+    StatusChecks(OverTemp, SwrFail, TransmitIndication, Volts, Mode);
 
     AmpTemp = ReadAmpTemp();  //Read the amplifier temp.
 
@@ -311,6 +289,7 @@ void loop() {
     // NOTE: We reset the ulCommTime during transmit so we wait 3 seconds AFTER transmit before checking!
     if ((millis() - ulCommTime) > 2000) {
       //Check and update the Band.
+      //Serial.print(F("Calling RigPortNumber CheckBandUpdate: ")); Serial.println(RigPortNumber);
       if (CheckBandUpdate(CurrentBand, RigPortNumber)) {
         //if (CheckRigAI2Mode(RigPortNumber, CurrentBand, PowerSetting))
         //Serial.println(F("           CheckBandUpdate returned true."));
@@ -320,7 +299,6 @@ void loop() {
         Bypass(Act_Byp);
         Serial.println(F("           Set to Active."));
       }
-      //Serial.print(F("    BandUpdate Returned: ")); Serial.println(CurrentBand);
       //Reset for the next 10 seconds:
       //  (Note: This is ALSO set during Transmit so that we don't attempt to change bands right after a transmit cycle.)
       ulCommTime = millis();
@@ -328,238 +306,50 @@ void loop() {
   }
 
 
+  //Update as required depending on the Mode
   switch (Mode) {
     case ModeOff: {
-        //System is off.
-        //Power to the Amp is Off.
-        //Display is blank.
-        //Auto-Detect Mode: Monitor for Power Up Switch indication using Voltage.
-
-
-        //For the K3, Re-enable the KPA3 internal amplifier.
-        if (RigModel == 1) {
-          if (K3AmpOnOff(RigPortNumber, true)) {
-            lcd.setCursor(0, 1);
-            lcd.print("K3 Amp NOT ON!  ");  //Display the Error
-            SendMorse("No Rig ");
-            //This is not a critical fault, but Setting the K3 KPA3 amp to BYPASS assures us that we can't overdrive the LDMOS amp.
-            // In this case, it was not Re-Enabled.
-          }
-        }
-        //Clear the RigModel variable:
-        RigModel = 0;
-        //Turn the time OFF.
-        bHours = 0;
-        bMinutes = 0;
-        Act_Byp = 0;
-
-        //Not sure if I want this...
-        //        Volts = ReadVoltage(1);
-        //        Serial.print(F("Volts = ")); Serial.println(Volts);
-        //        if (Volts > 30) {
-        //          //Manual Power Up Detected!
-        //          //Change Mode to ModePowerTurnedOn.
-        //          Mode = ModePowerTurnedOn;
-        //          //Problem is, it may cycle Display On and Off!!!
-        //
-        //        }
-        //        Serial.print(F("Mode was Off, Mode = ")); Serial.println(Mode);  //Did we change modes?
-
+        SubOff(RigModel, RigPortNumber, bHours, bMinutes, Act_Byp);
         break;
       }
-
     case ModePowerTurnedOn: {
-        //Power On was just detected on the push buttons.
-        //Attempt to establish communications with the radio (either K3 or KX3)
-        if (PowerUpRoutine(CurrentBand, RigPortNumber, RigModel)) {
-          if (CurrentBand == 255) {
-            //FAILED, Didn't establish Comms:
-            lcd.setCursor(0, 1);
-            lcd.print("No Comm with Rig");
-            delay(2000);
-            //Turn the Mode back off...
-            Mode = ModeOff;
-          }
-        }
-        else {
-          //Established Comms with rig OK:
-
-          //For the K3, DISABLE the internal 100w Amp:
-          if (RigModel == 1) {
-            //DISABLE the internal 100w Amp:
-            if (K3AmpOnOff(RigPortNumber, false)) {
-              //Failed to Disable the K3 KPA3 Amp
-              Act_Byp = 0;
-              Bypass(Act_Byp);  //Set to Bypass
-              lcd.setCursor(0, 1);
-              lcd.print("K3 Amp NOT OFF! ");  //Display the Error
-              SendMorse("K3 Amp err ");
-
-              //Display a "Continuing anyway" message for 1 second.
-              lcd.setCursor(0, 1);
-              lcd.print("Continuing (Byp)");
-              delay(1000);
-              //This is not a critical fault, but Setting the K3 KPA3 amp to BYPASS assures us that we can't overdrive the LDMOS amp.
-            }
-          }
-
-          //Turn on the Power to the Amp
-          digitalWrite(PowerSwitchPin, ON);
-          delay(1000);
-
-          //Check the reading for the Volt Meter
-          Volts = ReadVoltage(1);
-          if (Volts < 30) {
-            //Power Up FAILED
-            lcd.setCursor(0, 1);  //Second Line
-            lcd.print("Pwr Fail:NoVolts");
-            delay(2000);
-            //Change back to Off Mode?
-            //Mode = ModeOff;
-            Mode = ModeReceive;
-            //Make sure we are in Bypass mode (though it probably won't matter.
-            Act_Byp = false;
-            Bypass(Act_Byp);
-            Serial.print(F("Failed Power Up Voltage Test")); Serial.println(Volts);
-          }
-          else {
-            //Power Up PASSED:
-
-            //Change the Mode to normal Receive mode.
-            Mode = ModeReceive;
-            //Serial.print(F("Using PortNumber: ")); Serial.println(RigPortNumber);
-            //Initialize the Time:
-            bHours = EEPROMReadInt(iHoursEeprom);
-            //Serial.print(F("ModePowerTurnedOn Read time as: ")); Serial.print(bHours);
-            bMinutes = 0;
-            //Calculate the Timeout Time with the current Hours and Minutes:
-            CalculateTimeout(bHours, bMinutes, ulTimeout);
-
-            //Setup Bypass/Operate Mode per stored value:
-            //Read the data in Eeprom, should we start in Bypass(0) or Operate(1) mode?
-            Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
-            Bypass(Act_Byp);
-
-            if (CurrentBand > i6m) {
-              //Invalid Band:
-              lcd.setCursor(0, 1);
-              lcd.print("Invalid Band    ");
-              delay(2000);
-            }
-            //Turn the Mode back off...
-            Mode = ModeReceive;
-            //Do I want to try to get the AI2 working???
-            //Set Rig to Mode "AI2" to indicate Freq & Power Changes:
-            //if (SetRigAi2Mode(RigPortNumber))
-          }
-        }
+        SubPowerTurnedOn(CurrentBand, RigPortNumber, RigModel, Mode, bHours, bMinutes, ulTimeout, Act_Byp);
         break;
       }
-
     case ModeSwrError: {
-        // SWR Error was detected at the top of the Main Loop.
-        //Make sure the Transmit indication is off:
-        TransmitIndication = false; //(Not sure if this is necessary!)
-
-        //The only thing to clear this is to cycle Power.
-        //  Set the Error Message:
-        SwrFailMessage = true;
-
-        //Set to Bypass:
-        Act_Byp = 0;
-        Bypass(Act_Byp);
-
-        // Wait for Power Reset button command.
-        //   Power Down, Wait for Voltage to drop to near Zero (about 5 seconds), then Power up again.
-
-        //Indicate the error.  This should beep pretty much continously, each time through the loop.
-        // ERR
-        SendMorse("Swr Err ");
+        SubSwrError(SwrFailMessage, Act_Byp);
         break;
       }
-
     case ModeSwrErrorReset: {
-        //User pressed the Select button
-        // Cycle the Power
-        Serial.println(F("OffRoutine from Loop-ModeSwrErrorReset"));
-        OffRoutine(CurrentBand, Mode);
-        Act_Byp = 0;
-        Bypass(Act_Byp);  //Make sure we are in Bypass mode.
-        delay(7000);  //Wait 7 seconds
-        PowerUpRoutine(CurrentBand, RigPortNumber, RigModel);
-        //Finally, change the mode to Receive.
-        Mode = ModeReceive;  //?? Is there something else that should change the Mode to Receive?????
+        SubSwrErrorReset(CurrentBand, Mode, Act_Byp, RigPortNumber, RigModel);
+        break;
       }
-
     case ModeReceive: {
-        //Read Internal Temp, even in the Off Mode:
-        //        int InternalTemp = ReadInternalTemp();
-        //        if (InternalTemp > 120) {
-        //          //Alarm???
-
-        //If the band is invalid, Set to Bypass
-        if (CurrentBand > i6m) {
-          //INVALID Band, set amp to Bypass Mode
-          Act_Byp = 0;
-          Bypass(Act_Byp);
-          //Serial.print(F("  Set to Bypass for Band: ")); Serial.println(CurrentBand);
-          //Serial.println(F("           Set to Active."));
-        }
-
-        FirstTransmit = true;
+        SubReceive(CurrentBand, Act_Byp, FirstTransmit);
         break;
       }
-
     case ModeTransmit: {
-        //Make sure that the Transimit Indication is ON.
-        // Update the Display for Fwd, Ref
-        ReadPower(FwdPower, RefPower, FirstTransmit);
-
-        //Clear the 'FirstTransmit' variable, will be reset in Receive mode:
-        FirstTransmit = false;
-
-        Swr = CalculateSwr(FwdPower, RefPower);
-        //double AmpTemp = ReadAmpTemp();  //Read the amplifier temp.
-        //Reset the start time so we are SURE that we don't change bands.
-        ulCommTime = millis();  //Serial.println(F("Hit ulCommWait in ModeTransmit."));
+        SubTransmit(FwdPower, RefPower, FirstTransmit, Swr, ulCommTime);
         break;
       }
-
-
-    case ModeOverTemp: {
+    case ModeOverTemp: {       
         //OverTemp was detected in the top of the Loop.
+        //SubOverTemp(OverTemp, Mode);
         //  Only thing to do is to wait for Overtemp to clear.  It will clear when the Heat Sink cools down.
         if (OverTemp == 1) Mode = ModeReceive;
         break;
       }
-
-
     case ModeSetupBandPower: {
-        //User is in Setup Mode: Changing the Per Band Power Output.
-        // Current Setting stored in Eeprom.  Max Power allowed per band is hard coded.
-
-        //THIS MAY NOT BE NEEDED!!!  RECHECK...
-        //This function just READs the current setting and displays ONLY the Error Messages such as "Already Max Power"
-        //  on the second line while in the ModeSetupBandPower mode.
-        byte Read = 1;
-        String ReturnString = BumpPowerSetting(Read, CurrentBand, PowerSetting);
-        if (ReturnString != "") {
-          lcd.setCursor(0, 1);
-          lcd.print(ReturnString);
-          delay(1000);
-        }
+        //No Functionality, do not call.
+        //SubSetupBandPower()
         break;
       }
-
     case ModeSetupPwrTimeout: {
         //User is in Setup Mode: Changing the Power Off Timeout value (up to 10 Hours)
-
-        //Clear the PowerSetting var:
+        //Clear the PowerSetting var:  (WHY???)
         PowerSetting = 0;
-
         break;
       }
-
     case ModeSetupBypOperMode: {
         //Select if we will Power Up in Bypass or Operate Mode (stored in Eeprom)
         break;

@@ -17,14 +17,11 @@
 // Update Display Routine
 // |______________|
 //Receive:
-//  160m Receive       Or:  160m 104 Receive  (104 is Temp?)
-//  50.4V  2:59        /Display the Voltage and Timeout Time remaining.
+//  160m Receive Byp    Or:  160m 104 Receive  Bypass is Optional
+//  50.4V 100^ 2:59        /Display the Voltage, Temp and Timeout Time remaining.
 //Transmit:
-//  160m XMT SWR:1.5  (Replace "XMT" with current Temp?
-//  50.4V F1200 R100
-//BYPASS:
-//  160m BYPASS Mode
-//  Press Dn to Clr
+//  160m TR SWR:1.50  (Replace "XMT" with current Temp?
+//  50.02 F1200 R100  Voltage, Forward Power, Reflected Power
 // |_______________|
 //SWR Error:
 // 160m SWR ERROR
@@ -39,6 +36,7 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
   String Line2 = "";
 
   if (Mode >= ModeSwrError) {
+    //For Modes other than Off & PowerUp, Get the BandString to start Line1.
     //Get the Current Band:
     Line1 = BandString(CurrentBand);
   }
@@ -64,12 +62,14 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
         Line1 = Line1 + "Receive";
         //If the Amp is in Bypass, indicate by adding the "Byp" to the end of the string.
         if (Act_Byp == false) Line1 = Line1 + " Byp";
-        
+
+        //Start Line 2
+        Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) +" " + String(int(bHours));
         if (bMinutes < 10) {   //char(223) is the Degree symbol.
-          Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) +" " + String(int(bHours)) + ":0" + String(int(bMinutes));
+          Line2 += ":0" + String(int(bMinutes));
         }
         else {
-          Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) +" " + String(int(bHours)) + ":" + String(int(bMinutes));
+          Line2 += ":" + String(int(bMinutes));
         }
         break;
       }
@@ -125,8 +125,8 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
     while (Line1.length() < 16) {
       Line1 += " ";
     }
-    
     lcd.print(Line1);
+    
     lcd.setCursor(0, 1);
     while (Line2.length() < 16) {
       Line2 += " ";

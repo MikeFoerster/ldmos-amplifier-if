@@ -3,29 +3,35 @@
 void SendMorse(String CharsToSend, bool Repeat=0) {
   //bool Repeat is an optional arg, when not specified, defaults to 0.
   static String Stored;
+
+  
   if (Repeat) {
+    //Optional Repeat arg, repeat last message:
     CharsToSend = Stored;
   }
-  else { Stored = CharsToSend; }
+  else { Stored = CharsToSend; }  //Store this message
   
   //Change all characters to Lower Case;
   CharsToSend.toLowerCase();
   int c = CharsToSend.length();
 
+  //Loop through and send each character.
   for (int i = 0; i < c; i++) {
     //Serial.print(F(" Sending Char: ")); Serial.println(CharsToSend[i]);
     morse(CharsToSend[i]);
   }
 }
 
-void dot() {                          // we need more dots
+void dot() {                          
+ //Send a dot
  digitalWrite(iBeeperPin, OFF);
  delay(1 * tempo);
  digitalWrite(iBeeperPin, ON);
  delay(1 * tempo);
 }
 
-void dash() {                        // a dash and a splash
+void dash() {                        
+ //Send a dash
  digitalWrite(iBeeperPin, OFF);
  delay(3 * tempo);
  digitalWrite(iBeeperPin, ON);
@@ -74,6 +80,7 @@ switch (letter) {
    case ' ': {delay(5 * tempo); break;}                        // This makes 7 * tempo for space
 
   }
- delay(2 * tempo);      // this makes 3 * tempo for letter end, and 7 * tempo for space
+  // Add an End of Character delay:
+  delay(2 * tempo);      // this makes 3 * tempo for letter end, and 7 * tempo for space
 }
 

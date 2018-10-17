@@ -26,12 +26,12 @@ byte TimeUpdate(byte &Mode, int &CurrentBand, byte &bHours, byte &bMinutes, unsi
 
   //Less than 10 Minutes, Sound the Beep: (Use Hours < 1 in case bHours goes negative.
   else if ((bHours <= 0) && ((bMinutes <= 10) && bMinutes > 0)) {
-    TimeoutBeeper(bMinutes);
+    TimeoutBeeper(bMinutes, Mode);
   }
   return Mode;
 }
 
-void TimeoutBeeper(byte bMinutes) {
+void TimeoutBeeper(byte bMinutes, byte Mode) {
   //Beep once at 10 minutes, twice at 9 minutes, etc.
   // We ONLY call this if time is < 10 Minutes!!
   if (Mode <= ModeTransmit) { //Don't beep during Config Modes

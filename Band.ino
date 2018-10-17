@@ -1,5 +1,4 @@
 
-
 byte ReadBand(byte RigPortNumber) {
   byte CurrentBand;
 
@@ -10,15 +9,15 @@ byte ReadBand(byte RigPortNumber) {
     CurrentBand = FreqToBand(TargetFreq);
   }
   else {
-    //Serial.println(F("Caught the Invalid Freq"));
     CurrentBand = 255; //Not a valid Frequency!!
     //Serial.println(F("  Not a Valid Ham Band Frequency   "));
+    //Don't SendMorse here, we may be just passing through invalid freq...
   }
   return CurrentBand;
 }
 
 byte FreqToBand(unsigned int TargetFreq) {
-  //Serial.print(F("Testing Target Freq")); Serial.println(TargetFreq);
+  //Returns Band (as a byte variable)
   //Convert the Frequency to Band
   if ((TargetFreq >= 1800) && (TargetFreq <= 2000))        return  i160m;
   else if ((TargetFreq >= 3500) && (TargetFreq <= 4000))   return  i80m;
@@ -34,13 +33,17 @@ byte FreqToBand(unsigned int TargetFreq) {
   else return 255;
 }
 
-bool CheckBandUpdate(int &CurrentBand, byte &RigPortNumber) {
+bool CheckBandUpdate(int &CurrentBand, byte RigPortNumber) {
   //Returns true if the band updates.
+  //Usede every so many seconds to see if the band changed.
+
   //Store the CurrentBand:
   int LastBand = CurrentBand;
 
   //Check for Band Update:  Takes about 340 ms:
   CurrentBand = ReadBand(RigPortNumber);  //Function just above...
+
+  //Serial.print(F("CurrentBand CheckBandUpdate: ")); Serial.println(CurrentBand);
 
   if (CurrentBand != LastBand) {
     if (CurrentBand <= i6m) {  //Only update for the Valid Bands
@@ -68,6 +71,7 @@ bool CheckBandUpdate(int &CurrentBand, byte &RigPortNumber) {
 
 bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
   //Returns true if it fails.
+  //Used from the Buttons functions to update the Power Setting for each individual band.
   //The byte that each band is represented by, is also the Eeprom address where the power value is stored.
   // i.e: i160m = 0, i80m = 2, i40m = 4, etc...
   int PowerValue = EEPROMReadInt(CurrentBand);
@@ -88,17 +92,19 @@ bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
     }
     return false;
   }
-  
+
   //Set the Power to the Rig using the "PCxxx" command.
   //Serial.println(F("  Setting PowerValue"));
   if (SetThePower(PowerValue, RigPortNumber)) {
     //Command Failed...
+    Serial.println(F("  SendMorse Rig Err 1. "));
+    SendMorse("Rig Err");
   }
   if (SetTunePower(PowerValue, RigPortNumber)) {
     //SetTunePower Failed
-    Serial.println(F("SetTunePower Failed from Band file."));
+    //Serial.println(F("SetTunePower Failed from Band file."));
+    SendMorse("Tune Err");
   }
-  //Serial.print(F(" TuneValue set as: ")); Serial.println(TuneValue);
 
   //Check the Eeprom setting, set to Operate or Bypass
   if (EEPROMReadInt(iBypassModeEeprom) == 0) Bypass(0); //Set to Bypass Mode
@@ -151,17 +157,14 @@ String BandString(int CurrentBand) {
 }
 
 
+int BumpPowerSetting(byte ReadIncDec, int CurrentBand) {
+  //  Returns PowerSetting.
 
-
-//Change the Power Setting:
-String BumpPowerSetting(byte ReadIncDec, int CurrentBand, int &PowerSetting) {
   //This changes the Power Setting by 1 Watt, either Up=1 or Down=0.
   // Reads the current setting set into Eeprom using CurrentBand.
   //  Reads and Verifies Power
   //  Writes the new Value to the Radio.
   //  Writes the new Value to Eeprom for the current Band.
-  //  Returns 0 for Failed, 1 for Successful.
-
 
   // KX3: 160 thru 20 has 15w max, 17 thru 10 has 12 watt max, 6m is 10 watt max.
   // K3 doesn't have these limitations.
@@ -185,8 +188,9 @@ String BumpPowerSetting(byte ReadIncDec, int CurrentBand, int &PowerSetting) {
   //   1  0.25
 
   //For Read, Inc or Dec, get current Power Setting for this band.
-  PowerSetting = EEPROMReadInt(CurrentBand);
-
+  //  Note: Invalid Values (un-initialized) are handled in UpdateBandPower
+  int PowerSetting = EEPROMReadInt(CurrentBand);  
+  
   //Check Up/Down for Max/Min range or Inc/Dec PowerSetting
   if (ReadIncDec == 2) { //Increment
     //For Increment, get Maximum Power setting for this band.
@@ -216,8 +220,8 @@ String BumpPowerSetting(byte ReadIncDec, int CurrentBand, int &PowerSetting) {
     EEPROMWriteInt(CurrentBand, PowerSetting);
   }
 
-  //Complete, return a blank string:
-  return "";
+  //Complete, return the PowerSetting:
+  return PowerSetting;
 }
 
 

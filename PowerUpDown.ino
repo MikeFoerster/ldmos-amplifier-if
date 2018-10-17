@@ -2,12 +2,16 @@
 //
 // Turn On Routine
 //
-bool PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
+byte PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel, bool &Act_Byp) {
+  //Returns 0 = Passed
+  //Returns 1 = Failed to Establish Comms
+  //Returns 2 = Failed to Disable K2 Internal Amp
+  //Returns 3 = Power Up, NO 50v detected
+  //Returns 4 = Invalid Band (could be outside the Ham Bands)
 
-  Serial.println(F("Running PowerUpRoutine"));
+  //Serial.println(F("Running PowerUpRoutine"));
 
-
-  //Clear the Antenna Output Relays to Off Mode
+  //Initialize the Display:
   lcd.display();
   lcd.setBacklight(1);  //ON
   lcd.setCursor(0, 0);
@@ -21,9 +25,9 @@ bool PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
   lcd.print("Reading Rig Freq");
 
   //
-  //On Startup, Establish Comms, Get the Current Band:
+  //Establish Comms, Get the Current Band:
   //
-  unsigned long StartTime = millis();  //Set for 10 sec timeout
+  unsigned long StartTime = millis();  //Set Start time for 'do' loop
 
   //Initialize the RigPortNumber so once we enter the loop, we will start with Port 1.
   RigPortNumber = 2;
@@ -34,43 +38,78 @@ bool PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
     if (RigPortNumber == 1) RigPortNumber = 2;
     else RigPortNumber = 1;
 
-    Serial.print(F("Testing RigPortNumber: ")); Serial.println(RigPortNumber);
-    RigModel = GetRigModel(RigPortNumber);
-    Serial.print(F("PowerUpRoutine RigModel Returned:  ")); Serial.println(RigModel);
+    //Serial.print(F("Testing RigPortNumber: ")); Serial.println(RigPortNumber);
+    RigModel = GetRigModel(RigPortNumber);  //Returns 1 or 2 when we establish comms
+    //Serial.print(F("PowerUpRoutine RigModel Returned:  ")); Serial.println(RigModel);
   } while ((RigModel == 0) && ((millis() - StartTime) < 5000));
 
-  if (RigModel > 0) {
-    //Get the Current Band setting:
-    CurrentBand = ReadBand(RigPortNumber);
 
-    //If Valid Band or even Invalid Band (30 or 60m):
-    if (CurrentBand <= i30m) {
-
-      lcd.setCursor(0, 1);
-      lcd.print("  Contact Port " + String(RigPortNumber));
-
-      //Serial.print(F("Valid Band:")); Serial.println(CurrentBand);
-      //Serial.print(F("RigPortNumber Found Rig on:")); Serial.println(RigPortNumber);
-
-      //Turn the power on to the Amplifier
-      digitalWrite(PowerSwitchPin, ON);
-      //Serial.println(F("                    Power Switch Set to ON."));
-      //Setup the Band Relays:
-      SetupBandOutput(CurrentBand);
-      //Set the Power Output for the band.
-      UpdateBandPower(CurrentBand, RigPortNumber);
-
-      //On:
-      SendMorse("On ");
-
-      return false;  //OK
-    }
-    else return true; //Failed to read band.
+  if (RigModel == 0) {
+    //Failed to establish Comms
+    return 1;
   }
-  else {
-    //ERR
-    SendMorse("Rig Err ");
-    return true;
+
+  //We've established Comms:
+
+  //For the K3, DISABLE the internal 100w Amp to prevent overdrive:
+  if (RigModel == 1) {
+    //Turn the Internal K3 Amp Off
+    if (K3AmpOnOff(RigPortNumber, false)) {
+      //Failed to Disable the K3 KPA3 Amp
+      Act_Byp = 0;   Bypass(Act_Byp);  //Set to Bypass
+      lcd.setCursor(0, 1);
+      lcd.print("K3 Amp NOT OFF! ");  //Display the Error
+      SendMorse("K3 Amp err ");
+      delay(1000);
+      //Display a "Continuing anyway" message for 1 second.
+      lcd.setCursor(0, 1);
+      lcd.print("Continuing (Byp)");
+      delay(1000);
+      //This is not a critical fault, but Setting the K3 KPA3 amp to BYPASS helps 
+      //   to assures us that we can't overdrive the LDMOS amp.
+      return 2;
+    }
+  }
+
+  //Get the Current Band setting:
+  CurrentBand = ReadBand(RigPortNumber);
+
+  if (CurrentBand > i30m) {  //255???
+    //Invalid Band (Could be somewhere outside the bands
+    return 4;
+  }
+
+  //If Valid Band or even Invalid Band (30 or 60m):
+  if (CurrentBand <= i30m) {
+    //Display Contact and PortNumber onbottom line
+    lcd.setCursor(0, 1);
+    lcd.print("  Contact Port " + String(RigPortNumber));
+
+    //Turn the power on to the Amplifier
+    digitalWrite(PowerSwitchPin, ON);
+    delay(2000);  //Allow time for the Power Supply to come up to voltage
+    
+    //Check the reading for the Volt Meter
+    float Volts = ReadVoltage(1);
+    if (Volts < 30) {
+      //Power Up FAILED
+      lcd.setCursor(0, 1);  //Second Line
+      lcd.print("Pwr Fail:NoVolts");
+      SendMorse("Pwr Volts");
+      delay(2000);
+      digitalWrite(PowerSwitchPin, OFF);
+      Serial.print(F("Failed Power Up Voltage Test")); Serial.println(Volts);
+      return 3;
+    }
+
+    //Setup the Band Relays:
+    SetupBandOutput(CurrentBand);
+    //Set the Power Output for the band.
+    UpdateBandPower(CurrentBand, RigPortNumber);
+
+    //On:
+    SendMorse("On ");
+    return 0;  //OK
   }
 }
 
@@ -81,22 +120,24 @@ bool PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
 void OffRoutine(int &CurrentBand, byte &Mode) {
   //Clear the Antenna Output Relays to Off Mode (Set to 160M which turns off all band relays.
 
-  CurrentBand = i160m;
-  SetupBandOutput(CurrentBand);
-  lcd.setBacklight(0);  //Turn Off The Display.
-  lcd.setCursor(0, 0);
   lcd.print("Off             ");
   lcd.setCursor(0, 1);
   lcd.print("                ");
+  delay(500);
 
-  //Do Stuff...
+  CurrentBand = i160m;  //CurrentBand set to i160m will turn off all relays.
+  SetupBandOutput(CurrentBand);
+
+  //Set Bypass output to off.
   Bypass(0);
+  //Turn Off Power to the Amp.
   digitalWrite(PowerSwitchPin, OFF);
+  delay(1000);
 
   //Turn off the Backlight and Display.
   lcd.setBacklight(0); //OFF
+  lcd.setCursor(0, 0);
   lcd.noDisplay();
-  //OFF
   SendMorse("Off ");
   //Set the Mode to ModeOff
   Mode = ModeOff;
