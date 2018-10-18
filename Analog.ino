@@ -1,7 +1,7 @@
 
 void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float &Volts, byte &Mode) {
   //Check for Mode Changes & update TransmitLED and Voltmeter...
-    OverTemp = digitalRead(OverTempLedPin);
+  OverTemp = digitalRead(OverTempLedPin);
   //Serial.print(F("OverTemp Status = ")); Serial.println(OverTemp);
   //OverTemp
   if ((OverTemp == false) && (Mode != ModeOverTemp)) {
@@ -63,7 +63,7 @@ void ReadPower(int &FwdPower, int &RefPower, bool NewValue) {
 }
 
 float CalculateSwr(float FwdPower, float RefPower) {
-  //We are in Transmit Mode, 
+  //We are in Transmit Mode,
   //Prevent division by Zero:
   if (RefPower == 0) RefPower = .0001;
   if (FwdPower == 0) FwdPower = 1;
@@ -84,25 +84,25 @@ float ReadVoltage(bool OneOnly) {
   //Two Problems:
   //1. Running the "Counts / 16.94" was changing the RigPortNumber from 1 to 66, Can't figure out why!!!
   //2. Averaging eliminates some bobble, but makes the Metering of voltage less accurate!
-  
-//  if (OneOnly) return Counts / 16.94;
-//
-//  //If OneOnly is 0, then average the readings:
-//  float Average;
-//
-//  //Anytime I include this next line, it Messes up my loop() RigPortNumber variable!!!
-//  //Volts[Index] = (float(Counts) / 16.94);
-//  if (Index < 5) Index += 1;
-//  else Index = 0;
-//
-//  for (int i = 0; i < 5; i++) {
-//    Average = Average + Volts[i];
-//  }
-//  Average = Average / 5;
-//
-//  //Serial.print(F("Counts counts reads: ")); Serial.println(Counts);
-//  //Serial.print(F("Calculated Volts reads: ")); Serial.println(Counts / 16.94);
-//  return Average;
+
+  //  if (OneOnly) return Counts / 16.94;
+  //
+  //  //If OneOnly is 0, then average the readings:
+  //  float Average;
+  //
+  //  //Anytime I include this next line, it Messes up my loop() RigPortNumber variable!!!
+  //  //Volts[Index] = (float(Counts) / 16.94);
+  //  if (Index < 5) Index += 1;
+  //  else Index = 0;
+  //
+  //  for (int i = 0; i < 5; i++) {
+  //    Average = Average + Volts[i];
+  //  }
+  //  Average = Average / 5;
+  //
+  //  //Serial.print(F("Counts counts reads: ")); Serial.println(Counts);
+  //  //Serial.print(F("Calculated Volts reads: ")); Serial.println(Counts / 16.94);
+  //  return Average;
 }
 
 double ReadAmpTemp() {
@@ -144,6 +144,9 @@ void SetFanSpeed(double InternalTemp) {
     analogWrite(iFanPwmPin, 150);  //Slow
     Serial.println(F("Set Fan to 100"));
     SendMorse("Fan3 ");
+    //Does the fan ever come on?  Keep track of it for a while:
+    int FanCounter = EEPROMReadInt(iFanCount);
+    EEPROMWriteInt(iFanCount, FanCounter + 1);
   }
   //Allow for 5 degrees of hysteresis.
   else if (InternalTemp < 90) {

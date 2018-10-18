@@ -88,6 +88,7 @@ const int i30m = 32;
 
 const int iHoursEeprom = 34; //Eeprom storage for the Timeout time Hours.
 const int iBypassModeEeprom = 36;
+const int iFanCount = 38;
 
 //Relay Name Constants
 const int OFF = 1;
@@ -192,7 +193,14 @@ void setup() {
   lcd.print(" W0IH LDMOS Amp ");
   lcd.setCursor(0, 1);
   lcd.print(VERSION_ID);
-  delay(2000);  //Leave it up 2 seconds.
+  delay(1500);
+  
+  //Display the FanCounter
+  int FanCounter = EEPROMReadInt(iFanCount);
+  lcd.setCursor(0, 1);
+  lcd.print("Fan Count " + String(FanCounter) + "     ");
+  delay(1000);  //Leave it up 2 seconds.
+  
   lcd.setBacklight(0);  //Turn it off.
 
   int CurrentBand = i160m;
@@ -268,9 +276,9 @@ void loop() {
     TemperatureReadTime = millis();
   }
 
-#ifdef DEBUG
-  PrintTheMode(Mode);
-#endif
+//#ifdef DEBUG
+//  PrintTheMode(Mode);
+//#endif
 
   //Check the buttons:
   Mode = HandleButtons(Mode, RigPortNumber, CurrentBand, PowerSetting, bHours, bMinutes, ulTimeout, Act_Byp);
@@ -297,7 +305,7 @@ void loop() {
         //Read the data in Eeprom, should we start in Bypass-(0) or Operate-(1) mode?
         Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
         Bypass(Act_Byp);
-        Serial.println(F("           Set to Active."));
+        //Serial.println(F("           Set to Active."));
       }
       //Reset for the next 10 seconds:
       //  (Note: This is ALSO set during Transmit so that we don't attempt to change bands right after a transmit cycle.)

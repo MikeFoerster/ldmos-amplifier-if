@@ -2,6 +2,47 @@
     COMMUNICATIONS WITH RIG AND AMP
 */
 
+String RadioCommandResponse(String InputCommand, byte PortNumber) {
+  //Send a Command, expecting a Response:
+  char character;
+  String Response = "";
+
+  //Serial.print(F("1  Port = ")); Serial.println(PortNumber);
+  //Serial.print(F("2  Sending = ")); Serial.println(InputCommand);
+
+//  static unsigned long ExecuteTime;
+//  Serial.print(F("  Rig Cmd: ")); Serial.print(InputCommand); 
+//  Serial.print(F("  Time from last Command = ")); Serial.println(millis() - ExecuteTime);
+//  ExecuteTime = millis();
+  
+  if (PortNumber == 1) {
+    Serial1.print(InputCommand);
+    //Serial1.flush();  //wait for the command to go out before trying to read
+
+    delay(25); //changed from 75 to 200 to 50, and to 25.  Manual says data should be ready in 10ms.
+
+    while (Serial1.available())  {
+      character = Serial1.read();
+      Response.concat(character);
+      delay(5);  //changed from 5 to 10
+      //Serial.print(Response);
+    }
+    return Response;
+  }
+  else if (PortNumber == 2) {
+    Serial2.print(InputCommand);
+
+    delay(25);
+    while (Serial2.available())  {
+      character = Serial2.read();
+      Response.concat(character);
+      delay(5);
+    }
+    //Serial.print(F("4  RadioCommandResponse = ")); Serial.println(Response);
+    return Response;
+  }
+}
+
 byte GetRigModel(byte RigPortNumber) {
 
   String Model = RadioCommandResponse("OM;", RigPortNumber);
@@ -139,41 +180,7 @@ bool SetThePower(byte PowerValue, byte RigPortNumber) {
   return false;
 }
 
-String RadioCommandResponse(String InputCommand, byte PortNumber) {
-  //Send a Command, expecting a Response:
-  char character;
-  String Response = "";
 
-  //Serial.print(F("1  Port = ")); Serial.println(PortNumber);
-  //Serial.print(F("2  Sending = ")); Serial.println(InputCommand);
-
-  if (PortNumber == 1) {
-    Serial1.print(InputCommand);
-    //Serial1.flush();  //wait for the command to go out before trying to read
-
-    delay(25); //changed from 75 to 200 to 50, and to 25.  Manual says data should be ready in 10ms.
-
-    while (Serial1.available())  {
-      character = Serial1.read();
-      Response.concat(character);
-      delay(5);  //changed from 5 to 10
-      //Serial.print(Response);
-    }
-    return Response;
-  }
-  else if (PortNumber == 2) {
-    Serial2.print(InputCommand);
-
-    delay(25);
-    while (Serial2.available())  {
-      character = Serial2.read();
-      Response.concat(character);
-      delay(5);
-    }
-    //Serial.print(F("4  RadioCommandResponse = ")); Serial.println(Response);
-    return Response;
-  }
-}
 
 /*
    NOT USING AI2 mode.  Experiment with it later...
