@@ -139,8 +139,10 @@ bool SetTunePower(byte TuneValue, byte RigPortNumber) {
   //Serial.print(F("  Menu Command Verified as: ")); Serial.println(Power);
 
   delay(10);
-  //Remove the Menu Command:
+  //Exit the Menu mode:
   RadioCommandResponse("MN255;", RigPortNumber);
+  
+  //Get the Power setting from the return string:
   int PwrSetting = Power.substring(2, 4).toInt();
   if (TuneValue != (PwrSetting *10)) {
     return true;

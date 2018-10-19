@@ -10,7 +10,7 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, int &PowerS
   boolean bWriteComplete = false;  //Used for Long Key Presses
   static int Hours;
   static bool EepromBypMode;
-  static int StartPowerSetting;  //Store the PowerSetting for when we enter the PowerSetting mode.
+  static int StartSetting;  //Store the PowerSetting for when we enter the PowerSetting mode.
 
   /*
       Read the Buttons and update the Upper Display as required:
@@ -32,7 +32,7 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, int &PowerS
     */
 
     //Setup Cycle:  From Receive > SetupBandPower > SetupPwrTimeout > BypOperMode > Receive...
-    
+
     //SELECT
     if (buttons & BUTTON_SELECT) {
 
@@ -43,13 +43,13 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, int &PowerS
             Mode = ModePowerTurnedOn;
             break;
           }
-        
+
         case ModeReceive: {
             //Select button pressed while in Recieve Mode, Change to ModeSetupBandPower:
             //  BUT FIRST, we need to set things up:
-            //Store the StartPowerSetting so we know if it changed. 
+            //Store the StartPowerSetting so we know if it changed.
             //   (Power Setting is passed in from the main();
-            StartPowerSetting = EEPROMReadInt(CurrentBand);
+            StartSetting = EEPROMReadInt(CurrentBand);
 
             //This function just READs the current setting and displays ONLY the Error Messages such as "Already Max Power"
             //  on the second line while in the ModeSetupBandPower mode.
@@ -60,9 +60,9 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, int &PowerS
             break;
           }
         case ModeSetupBandPower: {
-            //Before entering next mode (ModeSetupPwrTimeout), 
+            //Before entering next mode (ModeSetupPwrTimeout),
             //  Write the new value to Eeprom (if it changed):
-            if (PowerSetting != StartPowerSetting) {
+            if (PowerSetting != StartSetting) {
               //Print a Wait Message while the writes take place.
               lcd.setCursor(0, 1);
               lcd.print("Wait...");
@@ -71,34 +71,51 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, int &PowerS
               //Serial.println(F("  Setting PowerValue"));
               if (SetThePower(PowerSetting, RigPortNumber)) {
                 //Command Failed...
-                Serial.println(F("  SendMorse Rig Err 2. "));
-                SendMorse("Rig Err");
+                SendMorse("Pwr Err");
                 //Serial.println(F("SetThePower Failed from Buttons file."));
               }
               //Also, set the "Tune" power to the same value
               if (SetTunePower(PowerSetting, RigPortNumber)) {
                 //SetTunePower Failed
-                Serial.println(F("SetTunePower Failed from Buttons file."));
+                //Serial.println(F("SetTunePower Failed from Buttons file."));
                 SendMorse("Tune Err");
               }
             }
-            
+
             //Need to initialize the Hours for the ModeSetupPwrTimeout mode.
             Hours = EEPROMReadInt(iHoursEeprom);
+            StartSetting = Hours;
             //Before starting to change the Power Down Timeout, Read the current Hours stored in Eeprom:
             Mode = ModeSetupPwrTimeout;
             break;
           }
         case ModeSetupPwrTimeout: {
             //Select Key, we are in ModeSetupPwrTimeout, change to ModeSetupBypOperMode.
-            //Check the EepromBypMode setting.
-            if (EEPROMReadInt(iBypassModeEeprom) == 0) EepromBypMode = false;
+            //Before changing Modes, write new Hours:
+            if (Hours != StartSetting) {
+              //If the Hours changed, write the new value to Eeprom.
+              EEPROMWriteInt(iHoursEeprom, Hours);
+              bHours = Hours;
+              bMinutes = 0;
+              //Recalculate the Timeout after the adjustment.
+              CalculateTimeout(bHours, bMinutes, ulTimeout);
+            }
+
+            //Read the EepromBypMode setting (It's either a 0 or 1).
+            StartSetting = EEPROMReadInt(iBypassModeEeprom);
+            if (StartSetting == 0) EepromBypMode = false;
             else EepromBypMode = true;
+            //Change to the next Setup Mode:
             Mode = ModeSetupBypOperMode;
             break;
           }
 
         case ModeSetupBypOperMode: {
+            //Before changing modes, write the new Opr/Byp value to Eeprom:
+            if ((StartSetting == 0) && (EepromBypMode == true) ||
+                (StartSetting == 1) && (EepromBypMode == false)) {
+              EEPROMWriteInt(iBypassModeEeprom, 0);
+            }
             //Select Key, we are in ModeSetupBypOperMode, change back to ModeReceive.
             Mode = ModeReceive;
             break;
@@ -113,77 +130,71 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, int &PowerS
       //Off Mode and AutoMode, Ignore
 
       //If The Up button is pressed, change from Bypass to Amplify
-      if (Mode == ModeReceive) {
-        //Up Button, Change from Bypass to Operate:
-        if (CurrentBand <= i6m) {
-          Act_Byp = 1;
-          Bypass(Act_Byp);  //Set from Bypass to Operate
-        }
-        else {
-          SendMorse("Band Err ");
-        }
-      }
-
-      else if (Mode == ModeSetupBandPower) {
-        //Up Button pressed, Increement the Power by 1 watt:
-        byte Increment = 2;  //Setup to Increment the BumpPowerSetting using the "2"
-        PowerSetting = BumpPowerSetting(Increment, CurrentBand);
-      }
-      else if (Mode == ModeSetupPwrTimeout) {
-        //Adjust Timeout Hours Up if less than 9  (Don't Let Hours go greater than 9, messes up!)
-        if (Hours < 9) {
-          Hours += 1;
-          EEPROMWriteInt(iHoursEeprom, Hours);
-        }
-        //else { //Already at Max: }
-        //Recalculate the Timeout after the adjustment.
-        //Serial.print(F("Buttons Up Read time as: ")); Serial.print(bHours);
-        CalculateTimeout(bHours, bMinutes, ulTimeout);
-      }
-      else if (Mode == ModeSetupBypOperMode) {
-        //Setup Mode, change from Bypass to Operate:
-        EepromBypMode = true;
-        EEPROMWriteInt(iBypassModeEeprom, 1);
+      switch (Mode) {
+        case ModeReceive: {
+            //Up Button, Change from Bypass to Operate (Valid operating band only!)
+            if (CurrentBand <= i6m) {
+              Act_Byp = 1;
+              Bypass(Act_Byp);  //Set from Bypass to Operate
+            }
+            else {
+              SendMorse("Band Err ");
+            }
+            break;
+          }
+        case ModeSetupBandPower: {
+            //Up Button pressed, Increement the Power by 1 watt:
+            byte Increment = 2;  //Setup to Increment the BumpPowerSetting using the "2"
+            PowerSetting = BumpPowerSetting(Increment, CurrentBand);
+            break;
+          }
+        case ModeSetupPwrTimeout: {
+            //Adjust Timeout Hours Up if less than 9  (Don't Let Hours go greater than 9, messes up!)
+            if (Hours < 9) {
+              Hours += 1;
+            }
+            //else { //Already at Max: }
+            break;
+          }
+        case ModeSetupBypOperMode: {
+            //Setup Mode, change from Bypass to Operate:
+            EepromBypMode = true;
+            break;
+          }
       }
     }  //End Up button
 
     //DOWN
     if (buttons & BUTTON_DOWN) {
       //Off Mode and AutoMode, Ignore
-
-      if (Mode == ModeReceive) {
-        //If In Bypass Mode, Change back to Operate
-        Act_Byp = 0;
-        Bypass(Act_Byp);  //Set from Operate to Bypass
-      }
-
-      else if (Mode == ModeSetupBandPower) {
-        //Down Button pressed, Decreement the Power by 1 watt:
-        byte Decrement = 3;  //Setup to Decrement the BumpPowerSetting using the "3"
-        PowerSetting = BumpPowerSetting(Decrement, CurrentBand);
-      }
-      else if (Mode == ModeSetupPwrTimeout) {
-        //Adjust Hours down:
-        if (Hours > 0) {
-          //Adjust Timeout Hours Up
-          if (Hours > 1) {
-            //Serial.print(F(" Down Hours started as: ")); Serial.println(Hours);
-            Hours -= 1; //Don't Let Hours go less than 1
-            EEPROMWriteInt(iHoursEeprom, Hours);
-            //Serial.print(F(" Down Hours ended as: ")); Serial.println(Hours);
+      switch (Mode) {
+        case ModeReceive: {
+            //If In Bypass Mode, Change back to Operate
+            Act_Byp = 0;
+            Bypass(Act_Byp);  //Set from Operate to Bypass
+            break;
           }
-        }
-        //else { //Already at Max: }
 
-        //Recalculate the Timeout after the adjustment.
-        //Serial.print(F("Buttons Up Read time as: ")); Serial.print(bHours);
-        CalculateTimeout(bHours, bMinutes, ulTimeout);
+        case ModeSetupBandPower: {
+            //Down Button pressed, Decreement the Power by 1 watt:
+            byte Decrement = 3;  //Setup to Decrement the BumpPowerSetting using the "3"
+            PowerSetting = BumpPowerSetting(Decrement, CurrentBand);
+            break;
+          }
+        case ModeSetupPwrTimeout: {
+            //Don't Let Hours go less than 1
+            if (Hours > 1) {
+              //Adjust Hours down:
+              Hours -= 1;
+            }
+            //else { //Already at Min: }
+            break;
+          }
+          case ModeSetupBypOperMode: {
+            EepromBypMode = false;
+            break;
+          }
       }
-      else if (Mode == ModeSetupBypOperMode) {
-        EepromBypMode = false;
-        EEPROMWriteInt(iBypassModeEeprom, 0);
-      }
-
     }  //End of 'if (DOWN)'
 
     //LEFT
@@ -201,12 +212,10 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, int &PowerS
     //RIGHT
     if (buttons & BUTTON_RIGHT) {
       if (Mode == ModeReceive) {
-        //When the Right button is pressed, while in the Recieve Mode, we
-        //   read Hours from Eeprom and RESET the Timeout:
+        //RESET the Timeout:
         bHours = EEPROMReadInt(iHoursEeprom);
         bMinutes = 0;
         //Recalculate the Timeout after the adjustment.
-        //Serial.print(F("Buttons Right Read time as: ")); Serial.print(bHours);
         CalculateTimeout(bHours, bMinutes, ulTimeout);
       }
     }

@@ -97,8 +97,7 @@ bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
   //Serial.println(F("  Setting PowerValue"));
   if (SetThePower(PowerValue, RigPortNumber)) {
     //Command Failed...
-    Serial.println(F("  SendMorse Rig Err 1. "));
-    SendMorse("Rig Err");
+    SendMorse("Pwr Err");
   }
   if (SetTunePower(PowerValue, RigPortNumber)) {
     //SetTunePower Failed
