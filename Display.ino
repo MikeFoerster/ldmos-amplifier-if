@@ -31,7 +31,7 @@
 // Wait for Clear  (Must wait for the temp to drop to below error value)
 
 
-void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, float Volts, int BandPower, bool Act_Byp, double AmpTemp, byte bHours, byte bMinutes) {
+void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, float Volts, bool Act_Byp, double AmpTemp, byte bHours, byte bMinutes) {
   String Line1 = "";
   String Line2 = "";
 
@@ -97,7 +97,7 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
 
     case ModeSetupBandPower: {
         Line1 = Line1 + "Band Power";
-        Line2 = String(BandPower) + " Watts";
+        Line2 = String(EEPROMReadInt(CurrentBand)) + " Watts";
         break;
       }
 

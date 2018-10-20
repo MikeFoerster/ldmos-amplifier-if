@@ -8,6 +8,7 @@ void CalculateTimeout(byte bHours, byte bMinutes, unsigned long &ulTimeout) {
 
 //Update the Hours and Minutes (Used each Loop) and call Beeper if less than 10 minutes.
 byte TimeUpdate(byte &Mode, int &CurrentBand, byte &bHours, byte &bMinutes, unsigned long &ulTimeout) {
+  //Returns Mode change
   //We should NOT get here if Mode == OFFMODE:
   unsigned long Seconds = ulTimeout - (millis() / 1000);
 
@@ -34,7 +35,7 @@ byte TimeUpdate(byte &Mode, int &CurrentBand, byte &bHours, byte &bMinutes, unsi
 void TimeoutBeeper(byte bMinutes, byte Mode) {
   //Beep once at 10 minutes, twice at 9 minutes, etc.
   // We ONLY call this if time is < 10 Minutes!!
-  if (Mode <= ModeTransmit) { //Don't beep during Config Modes
+  if (Mode <= ModeTransmit) { //Don't beep during Transmit or Config Modes
     static int LastBeep;
     int numberOfBeeps = 11 - bMinutes;
 

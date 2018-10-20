@@ -238,7 +238,6 @@ void loop() {
   static unsigned long TemperatureReadTime;
   static double InternalTemp;
   static double AmpTemp;
-  static int PowerSetting;
   static int CurrentBand;
   static byte bHours;
   static byte bMinutes;
@@ -249,7 +248,7 @@ void loop() {
   static bool FirstTransmit;
   static byte Mode;
 
-  //Startup:
+  //Used for Startup Only:
   if (Mode == 0) Mode = ModeOff;
   
   if (Mode == ModeOff) {
@@ -281,7 +280,7 @@ void loop() {
 //#endif
 
   //Check the buttons:
-  Mode = HandleButtons(Mode, RigPortNumber, CurrentBand, PowerSetting, bHours, bMinutes, ulTimeout, Act_Byp);
+  Mode = HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp);
 
   //Run a few checks...
   if (Mode >= ModeReceive ) {  //Running
@@ -348,14 +347,13 @@ void loop() {
         break;
       }
     case ModeSetupBandPower: {
+      //Note: PowerSetting var is filled in from Buttons function, and passed back to here and into Display function.
         //No Functionality, do not call.
         //SubSetupBandPower()
         break;
       }
     case ModeSetupPwrTimeout: {
         //User is in Setup Mode: Changing the Power Off Timeout value (up to 10 Hours)
-        //Clear the PowerSetting var:  (WHY???)
-        PowerSetting = 0;
         break;
       }
     case ModeSetupBypOperMode: {
@@ -367,7 +365,7 @@ void loop() {
   }  //End of switch(Mode)
 
   //UpdateDisplay takes ~200ms
-  UpdateDisplay(Mode, CurrentBand, FwdPower, RefPower, Swr, Volts, PowerSetting, Act_Byp, AmpTemp, bHours, bMinutes);
+  UpdateDisplay(Mode, CurrentBand, FwdPower, RefPower, Swr, Volts, Act_Byp, AmpTemp, bHours, bMinutes);
 
 }  //End of Main Loop()
 
