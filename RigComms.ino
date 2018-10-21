@@ -182,6 +182,16 @@ bool SetThePower(byte PowerValue, byte RigPortNumber) {
   return false;
 }
 
+void RigPowerOff(byte RigPortNumber) {
+  //Returns true on failure
+  //Set Menu Command for Tune Power
+  String Response = RadioCommandResponse("PS0;", RigPortNumber);
+  if (Response == "") {
+    delay(100);
+    Response = RadioCommandResponse("PC0;", RigPortNumber);
+  }
+  Serial.print(F("Power Off returned: ")); Serial.println(Response);
+}
 
 
 /*

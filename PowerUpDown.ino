@@ -9,8 +9,6 @@ byte PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel, bool
   //Returns 3 = Power Up, NO 50v detected
   //Returns 4 = Invalid Band (could be outside the Ham Bands)
 
-  //Serial.println(F("Running PowerUpRoutine"));
-
   //Initialize the Display:
   lcd.display();
   lcd.setBacklight(1);  //ON
@@ -24,6 +22,11 @@ byte PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel, bool
   lcd.setCursor(0, 1);
   lcd.print("Reading Rig Freq");
 
+// Set the data rate for Serial Port 1
+  Serial1.begin(38400);
+  // And for Serial Port 2.
+  Serial2.begin(38400);
+  
   //
   //Establish Comms, Get the Current Band:
   //
@@ -54,7 +57,7 @@ byte PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel, bool
   //For the K3, DISABLE the internal 100w Amp to prevent overdrive:
   if (RigModel == 1) {
     //Turn the Internal K3 Amp Off
-    if (K3AmpOnOff(RigPortNumber, false)) {
+    if (K3AmpOnOff(RigPortNumber, ON)) {
       //Failed to Disable the K3 KPA3 Amp
       Act_Byp = 0;   Bypass(Act_Byp);  //Set to Bypass
       lcd.setCursor(0, 1);
@@ -117,7 +120,7 @@ byte PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel, bool
 //
 // Shut Down Routine
 //
-void OffRoutine(int &CurrentBand, byte &Mode) {
+void OffRoutine(byte &Mode) {
   //Clear the Antenna Output Relays to Off Mode (Set to 160M which turns off all band relays.
 
   lcd.print("Off             ");
@@ -125,8 +128,8 @@ void OffRoutine(int &CurrentBand, byte &Mode) {
   lcd.print("                ");
   delay(500);
 
-  CurrentBand = i160m;  //CurrentBand set to i160m will turn off all relays.
-  SetupBandOutput(CurrentBand);
+  //Set to i160m, will turn off all relays.
+  SetupBandOutput(i160m);
 
   //Set Bypass output to off.
   Bypass(0);
@@ -142,6 +145,9 @@ void OffRoutine(int &CurrentBand, byte &Mode) {
   //Set the Mode to ModeOff
   Mode = ModeOff;
   //Off Routine Complete.
+//  Serial1.end();
+//  Serial2.end();
+//  Serial.println(F("  Serial.1/2.end"));
 }
 
 

@@ -5,10 +5,8 @@ void CalculateTimeout(byte bHours, byte bMinutes, unsigned long &ulTimeout) {
 }
 
 
-
 //Update the Hours and Minutes (Used each Loop) and call Beeper if less than 10 minutes.
-byte TimeUpdate(byte &Mode, int &CurrentBand, byte &bHours, byte &bMinutes, unsigned long &ulTimeout) {
-  //Returns Mode change
+void TimeUpdate(byte &Mode, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte RigPortNumber) {
   //We should NOT get here if Mode == OFFMODE:
   unsigned long Seconds = ulTimeout - (millis() / 1000);
 
@@ -19,17 +17,15 @@ byte TimeUpdate(byte &Mode, int &CurrentBand, byte &bHours, byte &bMinutes, unsi
   //Check for Timeout: (TimeoutTime is stored in Seconds)
   if (Seconds <= 0) {
     //Call the Off Routine to set into Off mode.
-    OffRoutine(CurrentBand, Mode);
-
-    //Mode = ModeOff;
-    return ModeOff;
+    OffRoutine(Mode);
+    //When we Timeout, also turn off the radio:
+    RigPowerOff(RigPortNumber);
   }
 
   //Less than 10 Minutes, Sound the Beep: (Use Hours < 1 in case bHours goes negative.
   else if ((bHours <= 0) && ((bMinutes <= 10) && bMinutes > 0)) {
     TimeoutBeeper(bMinutes, Mode);
   }
-  return Mode;
 }
 
 void TimeoutBeeper(byte bMinutes, byte Mode) {
@@ -42,7 +38,7 @@ void TimeoutBeeper(byte bMinutes, byte Mode) {
     if (LastBeep != bMinutes)  {
       //Cycle through the number of beeps:
       for (int i = 0; i < numberOfBeeps; i++) {
-        SendMorse("t");
+        SendMorse("e");
         delay(100);
       }
       //Store the Last Beep so we don't repeat each cycle:
@@ -50,6 +46,4 @@ void TimeoutBeeper(byte bMinutes, byte Mode) {
     }
   }
 }
-
-
 

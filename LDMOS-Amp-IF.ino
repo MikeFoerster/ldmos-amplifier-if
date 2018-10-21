@@ -203,13 +203,9 @@ void setup() {
   
   lcd.setBacklight(0);  //Turn it off.
 
-  int CurrentBand = i160m;
-  //Serial.println(F("OffRoutine from Setup"));
-
-  //OffRoutine requires a Mode variable, create one:
-  byte tmpMode = 0;
   //Use the OffRoutine to disable everything.
-  OffRoutine(CurrentBand, tmpMode);
+  byte tmpMode =0; //Var required for OffRoutine
+  OffRoutine(tmpMode);
 
   //I had trouble initialzing the time, if it's greater than 9, put it back to 3 hours.
   if (EEPROMReadInt(iHoursEeprom) > 9) {
@@ -261,7 +257,7 @@ void loop() {
   }
   else {
     //If Not Off, Update the time.  (When Time Expires, will change to OFF mode.)
-    Mode = TimeUpdate(Mode, CurrentBand, bHours, bMinutes, ulTimeout);
+    TimeUpdate(Mode, bHours, bMinutes, ulTimeout, RigPortNumber);
     delay(10);
   }
 
@@ -280,7 +276,7 @@ void loop() {
 //#endif
 
   //Check the buttons:
-  Mode = HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp);
+  HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp);
 
   //Run a few checks...
   if (Mode >= ModeReceive ) {  //Running
@@ -292,22 +288,19 @@ void loop() {
 
     AmpTemp = ReadAmpTemp();  //Read the amplifier temp.
 
-    //Check the Band every so many seconds...
-    // NOTE: We reset the ulCommTime during transmit so we wait 3 seconds AFTER transmit before checking!
+    //Check the Band every few seconds...
+    // NOTE: We reset the ulCommTime during transmit so we wait the full time AFTER transmit before checking!
     if ((millis() - ulCommTime) > 2000) {
       //Check and update the Band.
-      //Serial.print(F("Calling RigPortNumber CheckBandUpdate: ")); Serial.println(RigPortNumber);
+      //if (CheckRigAI2Mode(RigPortNumber, CurrentBand, PowerSetting))
       if (CheckBandUpdate(CurrentBand, RigPortNumber)) {
-        //if (CheckRigAI2Mode(RigPortNumber, CurrentBand, PowerSetting))
-        //Serial.println(F("           CheckBandUpdate returned true."));
+        //Band change detected
 
         //Read the data in Eeprom, should we start in Bypass-(0) or Operate-(1) mode?
         Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
         Bypass(Act_Byp);
-        //Serial.println(F("           Set to Active."));
       }
-      //Reset for the next 10 seconds:
-      //  (Note: This is ALSO set during Transmit so that we don't attempt to change bands right after a transmit cycle.)
+      //Reset for the next cycle update: (Note: This is ALSO set during Transmit cycle)
       ulCommTime = millis();
     }
   }
@@ -316,7 +309,7 @@ void loop() {
   //Update as required depending on the Mode
   switch (Mode) {
     case ModeOff: {
-        SubOff(RigModel, RigPortNumber, bHours, bMinutes, Act_Byp);
+        SubOff(RigModel, RigPortNumber, bHours, bMinutes, Act_Byp, CurrentBand);
         break;
       }
     case ModePowerTurnedOn: {

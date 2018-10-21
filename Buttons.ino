@@ -1,8 +1,7 @@
 //
 // Handle the Button Presses
 //
-byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, bool &Act_Byp) {
-  static int PowerSetting;
+void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, bool &Act_Byp) {
   static int LastButton;
   static long InitialButtonTime;
   //Initial State needs more thought... FixMe
@@ -10,6 +9,7 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
   boolean bWriteComplete = false;  //Used for Long Key Presses
   static int Hours;
   static int EepromBypMode;
+  static int PowerSetting;  //Store the updated PowerSetting in Setup Band Power mode.
   static int StartSetting;  //Store the PowerSetting for when we enter the PowerSetting mode.
 
   /*
@@ -221,11 +221,11 @@ byte HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
     if (bWriteComplete == false) {
       if ((millis() - StartTime > 2000) && (buttons & BUTTON_SELECT)) {
         //2 Second SELECT button turns the unit OFF.
-        //Serial.println(F("OffRoutine from Buttons-Button_Select"));
-        OffRoutine(CurrentBand, Mode);
-        //Reset the Mode to Off.
-        Mode = ModeOff;
+        OffRoutine(Mode);
         bWriteComplete = true;
+        //When we turn the system off, also turn off the radio:
+        Serial.print(F("CAlling RigPowerOff for Comm: ")); Serial.println(RigPortNumber);
+        RigPowerOff(RigPortNumber);
       }
     }
   }

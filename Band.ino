@@ -1,5 +1,6 @@
 
 byte ReadBand(byte RigPortNumber) {
+  //Returns new band
   byte CurrentBand;
 
   //Read the Frequency from the Radio and convert to Band (byte)
@@ -43,28 +44,26 @@ bool CheckBandUpdate(int &CurrentBand, byte RigPortNumber) {
   //Check for Band Update:  Takes about 340 ms:
   CurrentBand = ReadBand(RigPortNumber);  //Function just above...
 
-  //Serial.print(F("CurrentBand CheckBandUpdate: ")); Serial.println(CurrentBand);
+  //If there was no change, we're done here...
+  if (CurrentBand == LastBand) return false;
 
-  if (CurrentBand != LastBand) {
-    if (CurrentBand <= i6m) {  //Only update for the Valid Bands
-      //Serial.print(F("CheckBandUpdate Reseting Band from: "));  Serial.println(LastBand); Serial.print(F(" to: ")); Serial.println(CurrentBand);
-      //Verify the band change:
-      delay(100);
-      byte CurrentBand2 = ReadBand(RigPortNumber);
-      if (CurrentBand == CurrentBand2) {
+  //There must have been a band change detected (Need to Verify)
+  if (CurrentBand <= i6m) {  //Only update for the Valid Bands
+    //Verify the band change:
+    delay(100);
+    byte CurrentBand2 = ReadBand(RigPortNumber);
+    if (CurrentBand == CurrentBand2) {
 
-        //Serial.print(F("CheckBandUpdate Reseting Band to: ")); Serial.println(CurrentBand);
-        //Update relays to the new band
-        SetupBandOutput(CurrentBand);  //Function just below...
+      //Serial.print(F("CheckBandUpdate Reseting Band to: ")); Serial.println(CurrentBand);
+      //Update relays to the new band
+      SetupBandOutput(CurrentBand);  //Function just below...
 
-        //Serial.println(F("Calling UpdateBandPower!"));
-        //Set the Power for the Rig to the Power Value stored in Eeprom
-        UpdateBandPower(CurrentBand, RigPortNumber);
-        return true;
-      }
+      //Serial.println(F("Calling UpdateBandPower!"));
+      //Set the Power for the Rig to the Power Value stored in Eeprom
+      UpdateBandPower(CurrentBand, RigPortNumber);
+      return true;
     }
   }
-  //Serial.print(F("Re-Check Band Still: ")); Serial.println(CurrentBand);
   //If we get this far, Band didn't change.
   return false;
 }
@@ -188,8 +187,8 @@ int BumpPowerSetting(byte ReadIncDec, int CurrentBand) {
 
   //For Read, Inc or Dec, get current Power Setting for this band.
   //  Note: Invalid Values (un-initialized) are handled in UpdateBandPower
-  int PowerSetting = EEPROMReadInt(CurrentBand);  
-  
+  int PowerSetting = EEPROMReadInt(CurrentBand);
+
   //Check Up/Down for Max/Min range or Inc/Dec PowerSetting
   if (ReadIncDec == 2) { //Increment
     //For Increment, get Maximum Power setting for this band.

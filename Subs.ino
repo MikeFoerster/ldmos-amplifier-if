@@ -1,7 +1,7 @@
 //This file is mostly Sub calls from Main():
 
 
-void SubOff(byte &RigModel, byte RigPortNumber, byte &bHours, byte &bMinutes, bool &Act_Byp) {
+void SubOff(byte &RigModel, byte RigPortNumber, byte &bHours, byte &bMinutes, bool &Act_Byp, int &CurrentBand) {
   //System is off.
   //Power to the Amp is Off.
   //Display is blank.
@@ -11,7 +11,7 @@ void SubOff(byte &RigModel, byte RigPortNumber, byte &bHours, byte &bMinutes, bo
   //  We only go through this once!!!
   if (RigModel == 1) {
     //Turn the K3 Internal Amp Back ON.
-    if (K3AmpOnOff(RigPortNumber, true)) {
+    if (K3AmpOnOff(RigPortNumber, OFF)) {
       lcd.setCursor(0, 1);
       lcd.print("K3 Amp NOT ON!  ");  //Display the Error
       SendMorse("No Rig ");
@@ -25,6 +25,7 @@ void SubOff(byte &RigModel, byte RigPortNumber, byte &bHours, byte &bMinutes, bo
   bHours = 0;
   bMinutes = 0;
   Act_Byp = 0;
+  CurrentBand = 0;
 
   //Not sure if I want this...
   //        Volts = ReadVoltage(1);
@@ -47,7 +48,7 @@ void SubPowerTurnedOn(int &CurrentBand, byte &RigPortNumber, byte &RigModel, byt
         lcd.setCursor(0, 1);
         lcd.print("No Comm with Rig");
         delay(2000);
-        //Turn the Mode back off...
+        //Turn the Mode back off... (but we didn't call OffRoutine, so the display stays with the message.)
         Mode = ModeOff;
         return;
         break;
@@ -59,7 +60,7 @@ void SubPowerTurnedOn(int &CurrentBand, byte &RigPortNumber, byte &RigModel, byt
       }
     case 3: {
         //Failed Power Up 50v Test
-        //Change back to Off Mode
+        //Change back to Off Mode  (but we didn't call OffRoutine, so the display stays with the message.)
         Mode = ModeOff;
         return;
         break;
@@ -119,21 +120,18 @@ void SubSwrError(bool &SwrFailMessage, bool &Act_Byp) {
     SwrFailMessage = true;
   }
 
-  //Set to Bypass:
+  //Set to Bypass, and keep it that way... (repeat every cycle).
   Act_Byp = 0;
   Bypass(Act_Byp);
 
-  // Wait for Power Reset button command.
+  // Wait for Power Reset Button (Right) command which will then change Mode to ModeSwrErrorReset,
   //   Power Down, Wait for Voltage to drop to near Zero (about 5 seconds), then Power up again.
-
-
 }
 
 void SubSwrErrorReset(int &CurrentBand, byte &Mode, bool &Act_Byp, byte &RigPortNumber, byte &RigModel) {
   //User pressed the Select button
   // Cycle the Power
-  //Serial.println(F("OffRoutine from Loop-ModeSwrErrorReset"));
-  OffRoutine(CurrentBand, Mode);
+  OffRoutine(Mode);
   Act_Byp = 0;
   Bypass(Act_Byp);  //Make sure we are in Bypass mode.
   delay(7000);  //Wait 7 seconds
