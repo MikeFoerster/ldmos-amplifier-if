@@ -1,0 +1,78 @@
+Test Procedure for LDMOS Amplifier Interface
+
+Boot up of Arduino from no power does not toggle any of the relays in the amplifier, or turn on the amplifier even briefly.
+
+Verify on boot up that the current version number is displayed along with the W0IH splash screen.
+
+Rig off, Press select button, prints message that there was no comms to the radio.
+
+Rig on, set to outside any ham band, press select button, should power up but say invalid band.  Verify Bypass mode.  Verify up button will not put it into operate mode.
+
+Rig on, set to 30 and 60 m band, press select button, should power up but say invalid band.  Verify Bypass mode.  Verify up button will not put it into operate mode.  Verify “Receive” and correct (approximate Temperature).
+
+Rig on, set to each of the valid ham bands, press select button, should power up and identify the correct band.  Verify Amplifier band selection is correct for each valid ham band.  
+   Verify “Receive” indication and correct (approximate) Temperature. 
+   Verify 50v readout.
+
+With rig on a valid band, tune to just outside the ham band.  Verify the amp goes into Bypass mode and cannot be changed to the Operate mode with the Up button.
+
+With rig connected to first one comm port, then the other, verify the correct comm port, 1 or 2, are reported when the select button is pressed to turn the system on.
+
+With the amplifier in normal operating condition, transmit, then as soon as you release the microphone button, change bands. Verify that the band does not change for several seconds after the band change is complete.
+
+Change all power supplies to a lower voltage.  Verify correct voltage.  Reset all supplies to 12.5v.
+
+Change rig from valid band to 60 m and verify that you cannot press the up button to put the system in to operate mode.  Must remain in bypass mode. Repeat for 30 m band.
+
+With system operating normally on valid band, turn off radio. Verify reasonable display response, indicating loss of communications with radio.  Repeat test for an invalid band.
+
+Verify holding select button for 2 to 3 seconds will turn Arduino display and Amplifier off.  Verify CW Message.  Verify that the Rig also Turns Off.  Verify with both the KX3 and K3.
+
+Press the Left button.  Verify that the last CW message is repeated.
+
+Connect to K3 and power up, verify from K3 menu that the KPA3 is in bypass mode.  Hold select button in for three seconds to power system down. Verify that the menu shows that the KPA3 is now in operating mode.
+
+With K3 connected, power off K3, then hold select key to turn off Arduino. Verify error message indicating “K3 Amp Not Off”.
+
+Set up for BYP/OPR set to Bypass, Rig on, set to a valid ham bands, press select button, should power up and identify the correct band but be in Bypass mode (Byp on top line).  
+    Set to operate, by pressing the up button.
+    Set rig different bands, verify that for each band the rig Display shows 
+      bypass mode. Verify that the up button will put it into operate mode.
+
+Set up for BYP/OPR set to Operate, Rig on, set to a valid ham bands, press select button, should power up and identify the correct band but be in Bypass mode (Byp on top line).  
+    Set to operate, by pressing the up button.
+    Set rig different bands, verify that for each band the rig Display shows 
+      bypass mode. Verify that the up button will put it into operate mode.
+
+With system set to a valid band, verify that you van press the Down button to change to Bypass mode, and the Up button to change to the Operate mode.
+
+Set up for one hour Timeout Period. Verify time decrement approximately every minute. Verify that once the time reaches 10 minutes, but there is one beep. Verify at nine minutes left, there are two beeps. Continue down until there are 10 beeps at one minute.  Verify that I had zero minutes, the amplifier and Arduino go into the office mode. Verify that the Rig also powers down.  Verify with both the KX3 and K3.
+
+Test set up timeout set 2 nine hours, eight hours, etc. Verify that the time correctly decrement‘s.
+
+After Time on the display has decrease normally, press the right button and verify that the system recovers to the correct timeout time.
+
+Trigger SWR error. Verify Error message on Display and CW.  Press left button and verify amplifier shuts down, reboot, and comes up correctly.  Verify that the Rig does not turn off. Verify correct band.
+
+Run amplifier on 160 m (seems to warm up a bit faster on that band) Until fan comes and stays on in receive mode. Note the temperature. 
+    Wait until fan shuts off, and note temperature again.
+
+Using a heat gun, warm up the amplifier temperature sensor until the over-temperature alarm is triggered on the Amplifier.  Note the temperature where this occurs. Verify error message and CW.  
+  Wait until the overtemperature goes out, and verify that the amplifier can 
+   be used.  Note the temperature.  Verify the system comes with the correct band and in operate mode.
+
+Using a heat gun, gently warm up the Arduino box and verify that the internal fan comes on.  Verify that the fan turns off when the fan cools the box down.
+
+System off.  Disconnect 5 V line from Arduino to power supply.  Verify appropriate message on display.
+
+System on.  Disconnect 5 V line from Arduino to power supply.  Verify appropriate message on display.
+
+Test band power levels. Verify band power cannot be sent below 1 W, or above the maximum level for each band (12 w for all but 6m which should be 9 w).  (Change 6 m to 6 w?)
+
+Set each band to a different power level through the set up menu.  Power down Arduino completely and power up again.  Verify output power and tune power are such as they were configured in the start of this test.
+
+Transmit using a microphone and verify reasonable FWD/REF power readout.
+
+Set band on radio to 75 m. Change amplifier to Bypass mode.  Adjust frequency until rig SWR shows approximately 1.8:1 SWR.   Set Amplifier to Operate mode.  Verify display shows approximately 1.8:1 SWR on both tune and voice peaks.
+
+Operate the rig with the amplifier enabled and turned on. Verify there are no adverse effects when opening rig menus and other functions.  
