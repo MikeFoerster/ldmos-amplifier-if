@@ -73,7 +73,7 @@ bool CheckBandUpdate(int &CurrentBand, byte RigPortNumber) {
   if (CurrentBand == LastBand) return false;
 
   //There must have been a band change detected (Need to Verify)
-  if (CurrentBand <= i6m) {  //Only update for the Valid Bands
+  if (CurrentBand <= i30m) {  //Only update for the Valid & Invalid Bands (Not for 255!)
     //Verify the band change:
     delay(100);
     byte CurrentBand2 = ReadBand(RigPortNumber);
