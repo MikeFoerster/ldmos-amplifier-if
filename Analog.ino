@@ -10,7 +10,7 @@ void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float
 
   //Test the SWR Fail input
   if (!(digitalRead(SwrFailLedPin))) {
-    Serial.println(F("SWR Fail!!!"));
+    //Serial.println(F("SWR Fail!!!"));
     Mode = ModeSwrError;  //Have to cycle power to recover.
   }
 
@@ -21,7 +21,7 @@ void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float
   else if ((TransmitIndication == true) && (Mode == ModeTransmit)) Mode = ModeReceive;
 
   //Update the reading for the Volt Meter
-  Volts = ReadVoltage(); //Average Reading
+  Volts = ReadVoltage();
 }
 
 void ReadPower(int &FwdPower, int &RefPower, bool NewValue) {
