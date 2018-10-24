@@ -68,18 +68,19 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
         //Start Line 2
         //Check for Low Voltage:
         if (Volts < 30) {
+          //Error only after the 5th time, otherwise may get false errors on startup.
           Line2 = String(Volts) +  "v  LOW VOLTS!";
           //Keep repeating an 'e' just as a warning!
           SendMorse("e");
         }
         //Volts OK, build the normal Recieve String:  Volts, AmpTemp, TimeRemaining...
         else {
-          Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+          Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
           if (bMinutes < 10) {   //char(223) is the Degree symbol.
-            Line2 += ": 0" + String(int(bMinutes));
+            Line2 += ":0" + String(int(bMinutes));
           }
           else {
-            Line2 += ": " + String(int(bMinutes));
+            Line2 += ":" + String(int(bMinutes));
           }
         }
         break;
