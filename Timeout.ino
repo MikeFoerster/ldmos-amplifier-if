@@ -6,7 +6,7 @@ void CalculateTimeout(byte bHours, byte bMinutes, unsigned long &ulTimeout) {
 
 
 //Update the Hours and Minutes (Used each Loop) and call Beeper if less than 10 minutes.
-void TimeUpdate(byte &Mode, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte RigPortNumber) {
+void TimeUpdate(byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte &Mode, byte RigPortNumber) {
   //We should NOT get here if Mode == OFFMODE:
   unsigned long Seconds = ulTimeout - (millis() / 1000);
 
@@ -18,7 +18,7 @@ void TimeUpdate(byte &Mode, byte &bHours, byte &bMinutes, unsigned long &ulTimeo
   if (Seconds <= 0) {
     //Call the Off Routine to set into Off mode.
     OffRoutine(Mode);
-    //When we Timeout, also turn off the radio:
+    //When we Timeout, also turn off the radio and close the Comm Ports.
     RigPowerOff(RigPortNumber);
   }
 

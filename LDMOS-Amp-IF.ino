@@ -138,18 +138,12 @@ int tempo = 65;
 //Declared here to allow for an optional "bool Repeat = default" argument (in the MorseCode file).
 void SendMorse(String CharsToSend, bool Repeat = 0);
 
-
 /*
     ############### Setup Procedure ############################
 */
 void setup() {
   // Monitor Comm Port Setup
   Serial.begin(115200);
-
-  // Set the data rate for Serial Port 1
-  Serial1.begin(38400);
-  // And for Serial Port 2.
-  Serial2.begin(38400);
 
   // set up the LCD's number of columns and rows:
   lcd.begin(16, 2);
@@ -257,8 +251,7 @@ void loop() {
   }
   else {
     //If Not Off, Update the time.  (When Time Expires, will change to OFF mode.)
-    TimeUpdate(Mode, bHours, bMinutes, ulTimeout, RigPortNumber);
-    delay(10);
+    TimeUpdate(bHours, bMinutes, ulTimeout, Mode, RigPortNumber);
   }
 
   //No matter what the mode is, Read Internal Temp every 10 seconds

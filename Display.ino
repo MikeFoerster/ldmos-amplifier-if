@@ -61,15 +61,26 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
     case ModeReceive: {
         Line1 = Line1 + "Receive";
         //If the Amp is in Bypass, indicate by adding the "Byp" to the end of the string.
-        if (Act_Byp == false) Line1 = Line1 + " Byp";
+        if (Act_Byp == false) {
+          Line1 = Line1 + " Byp";
+        }
 
         //Start Line 2
-        Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) +" " + String(int(bHours));
-        if (bMinutes < 10) {   //char(223) is the Degree symbol.
-          Line2 += ":0" + String(int(bMinutes));
+        //Check for Low Voltage:
+        if (Volts < 30) {
+          Line2 = String(Volts) +  "v  LOW VOLTS!";
+          //Keep repeating an 'e' just as a warning!
+          SendMorse("e");
         }
+        //Volts OK, build the normal Recieve String:  Volts, AmpTemp, TimeRemaining...
         else {
-          Line2 += ":" + String(int(bMinutes));
+          Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+          if (bMinutes < 10) {   //char(223) is the Degree symbol.
+            Line2 += ": 0" + String(int(bMinutes));
+          }
+          else {
+            Line2 += ": " + String(int(bMinutes));
+          }
         }
         break;
       }
@@ -79,13 +90,13 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
         if (Fwd < 10) FZeros = "   ";
         else if (Fwd < 100) FZeros = "  ";
         else if (Fwd < 1000) FZeros = " ";
-        
+
         String RZeros = "";
         if (Ref < 10) RZeros = "  ";
         else if (Ref < 100) RZeros = " ";
-        
-        Line1 = Line1 + "TR SWR:" + String(SWR);
-        Line2 =  String(Volts) + " F" + FZeros + String(Fwd) + " R" + RZeros + String(Ref); 
+
+        Line1 = Line1 + "TR SWR: " + String(SWR);
+        Line2 =  String(Volts) + " F" + FZeros + String(Fwd) + " R" + RZeros + String(Ref);
         break;
       }
 
@@ -97,7 +108,8 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
 
     case ModeSetupBandPower: {
         Line1 = Line1 + "Band Power";
-        Line2 = String(EEPROMReadInt(CurrentBand)) + " Watts";
+        if (CurrentBand <= i6m) Line2 = String(EEPROMReadInt(CurrentBand)) + " Watts";
+        else Line2 = "Invalid Band    ";
         break;
       }
 
@@ -126,7 +138,7 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
       Line1 += " ";
     }
     lcd.print(Line1);
-    
+
     lcd.setCursor(0, 1);
     while (Line2.length() < 16) {
       Line2 += " ";

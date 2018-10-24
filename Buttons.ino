@@ -60,7 +60,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             //Before entering next mode (ModeSetupPwrTimeout),
             //  Write the new value to Eeprom (if it changed):
             if (PowerSetting != StartSetting) {
-              
+
               //Write the new value to the Rig:
               //Serial.println(F("  Setting PowerValue"));
               if (SetThePower(PowerSetting, RigPortNumber)) {
@@ -126,7 +126,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
               Bypass(Act_Byp);  //Set from Bypass to Operate
             }
             else {
-              SendMorse("Band Err ");
+              SendMorse("T ");
             }
             break;
           }
@@ -225,6 +225,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
         bWriteComplete = true;
         //When we turn the system off, also turn off the radio:
         Serial.print(F("CAlling RigPowerOff for Comm: ")); Serial.println(RigPortNumber);
+        //Turn the Rig Off and Close the Comm Ports. 
         RigPowerOff(RigPortNumber);
       }
     }

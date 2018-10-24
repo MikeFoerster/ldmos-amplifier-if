@@ -1,6 +1,5 @@
-
 byte ReadBand(byte RigPortNumber) {
-  //Returns new band
+  //Using Frequency:  Returns new band
   byte CurrentBand;
 
   //Read the Frequency from the Radio and convert to Band (byte)
@@ -9,6 +8,15 @@ byte ReadBand(byte RigPortNumber) {
   if (TargetFreq > 0) {
     CurrentBand = FreqToBand(TargetFreq);
   }
+
+//TRIED the "BN;" command, but reading the Frequency allows knowing when we are out of the valid Ham Bands
+//  //Read the BAND ("BN;") from the Radio and convert to Band (byte)
+//  unsigned int Band = ReadTheBand(RigPortNumber);  //Through RigComms
+//  //Serial.print(F("Target Freq: ")); Serial.println(TargetFreq);
+//  if (Band <= 10) {
+//    CurrentBand = BandNumberToBand(Band);
+//  }
+
   else {
     CurrentBand = 255; //Not a valid Frequency!!
     //Serial.println(F("  Not a Valid Ham Band Frequency   "));
@@ -16,6 +24,23 @@ byte ReadBand(byte RigPortNumber) {
   }
   return CurrentBand;
 }
+
+//int BandNumberToBand(byte BandNumber) {
+//  switch (BandNumber) {
+//    case 0: { return i160m; break; }
+//    case 1: { return i80m; break; }
+//    case 2: { return i60m; break; }
+//    case 3: { return i40m; break; }
+//    case 4: { return i60m; break; }
+//    case 5: { return i20m; break; }
+//    case 6: { return i17m; break; }
+//    case 7: { return i15m; break; }
+//    case 8: { return i12m; break; }
+//    case 9: { return i10m; break; }
+//    case 10: { return i6m; break; }
+//    default: { return 255; break;}
+//  }
+//}
 
 byte FreqToBand(unsigned int TargetFreq) {
   //Returns Band (as a byte variable)
@@ -150,7 +175,7 @@ String BandString(int CurrentBand) {
     case i12m:  return "12m  "; break;
     case i10m:  return "10m  "; break;
     case i6m:   return "6m   "; break;
-    default:    return  ""; break;
+    default:    return "Unkn "; break;
   }
 }
 

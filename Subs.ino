@@ -28,7 +28,7 @@ void SubOff(byte &RigModel, byte RigPortNumber, byte &bHours, byte &bMinutes, bo
   CurrentBand = 0;
 
   //Not sure if I want this...
-  //        Volts = ReadVoltage(1);
+  //        Volts = ReadVoltage();
   //        Serial.print(F("Volts = ")); Serial.println(Volts);
   //        if (Volts > 30) {
   //          //Manual Power Up Detected!

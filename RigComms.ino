@@ -10,11 +10,11 @@ String RadioCommandResponse(String InputCommand, byte PortNumber) {
   //Serial.print(F("1  Port = ")); Serial.println(PortNumber);
   //Serial.print(F("2  Sending = ")); Serial.println(InputCommand);
 
-//  static unsigned long ExecuteTime;
-//  Serial.print(F("  Rig Cmd: ")); Serial.print(InputCommand); 
-//  Serial.print(F("  Time from last Command = ")); Serial.println(millis() - ExecuteTime);
-//  ExecuteTime = millis();
-  
+  //  static unsigned long ExecuteTime;
+  //  Serial.print(F("  Rig Cmd: ")); Serial.print(InputCommand);
+  //  Serial.print(F("  Time from last Command = ")); Serial.println(millis() - ExecuteTime);
+  //  ExecuteTime = millis();
+
   if (PortNumber == 1) {
     Serial1.print(InputCommand);
     //Serial1.flush();  //wait for the command to go out before trying to read
@@ -100,12 +100,22 @@ bool K3AmpOnOff(byte RigPortNumber, bool OnOff) {
 unsigned int ReadTheFrequency(byte RigPortNumber) {
   String Frequency = RadioCommandResponse("FA;", RigPortNumber);
   //Serial.print(F("  RawFrequency Read as: ")); Serial.println(Frequency);
+  if (Frequency == "") return 255;
   //Convert the Power to an Integer:
   unsigned int iFreq = Frequency.substring(5, 10).toInt();
   //Serial.print(F("  iFreq Read as: ")); Serial.println(iFreq);
   return iFreq;
 }
 
+//int ReadTheBand(byte RigPortNumber) {
+//  String Band = RadioCommandResponse("BN;", RigPortNumber);
+//  //Serial.print(F("  Band Read as: ")); Serial.println(Band);
+//  if (Band == "") return 255;
+//  //Convert the Band string to an Integer:
+//  int BandNumber = Band.substring(2).toInt();
+//  //Serial.print(F("  Band Number Read as: ")); Serial.println(BandNumber);
+//  return BandNumber;
+//}
 
 unsigned int ReadThePower(byte RigPortNumber) {
   String Power = RadioCommandResponse("PC;", RigPortNumber);
@@ -141,10 +151,10 @@ bool SetTunePower(byte TuneValue, byte RigPortNumber) {
   delay(10);
   //Exit the Menu mode:
   RadioCommandResponse("MN255;", RigPortNumber);
-  
+
   //Get the Power setting from the return string:
   int PwrSetting = Power.substring(2, 4).toInt();
-  if (TuneValue != (PwrSetting *10)) {
+  if (TuneValue != (PwrSetting * 10)) {
     return true;
   }
   else return false;
@@ -187,10 +197,14 @@ void RigPowerOff(byte RigPortNumber) {
   //Set Menu Command for Tune Power
   String Response = RadioCommandResponse("PS0;", RigPortNumber);
   if (Response == "") {
+    //Just in case the command fails, Try again...
     delay(100);
     Response = RadioCommandResponse("PC0;", RigPortNumber);
   }
   Serial.print(F("Power Off returned: ")); Serial.println(Response);
+  //Close the external Serial Ports...
+  Serial1.end();
+  Serial2.end();
 }
 
 

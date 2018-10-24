@@ -21,7 +21,7 @@ void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float
   else if ((TransmitIndication == true) && (Mode == ModeTransmit)) Mode = ModeReceive;
 
   //Update the reading for the Volt Meter
-  Volts = ReadVoltage(0); //Average Reading
+  Volts = ReadVoltage(); //Average Reading
 }
 
 void ReadPower(int &FwdPower, int &RefPower, bool NewValue) {
@@ -72,37 +72,12 @@ float CalculateSwr(float FwdPower, float RefPower) {
 }
 
 
-float ReadVoltage(bool OneOnly) {
-  //Returns Average Voltage
-  // or if OneOnly, returns instantanious Voltage.
-  static float Volts[5];
-  static int Index;
-
+float ReadVoltage() {
+  //Returns Voltage
+  
   //Take the Voltage Reading:
   int Counts = analogRead(A0);
   return (float(Counts) / 16.94);
-  //Two Problems:
-  //1. Running the "Counts / 16.94" was changing the RigPortNumber from 1 to 66, Can't figure out why!!!
-  //2. Averaging eliminates some bobble, but makes the Metering of voltage less accurate!
-
-  //  if (OneOnly) return Counts / 16.94;
-  //
-  //  //If OneOnly is 0, then average the readings:
-  //  float Average;
-  //
-  //  //Anytime I include this next line, it Messes up my loop() RigPortNumber variable!!!
-  //  //Volts[Index] = (float(Counts) / 16.94);
-  //  if (Index < 5) Index += 1;
-  //  else Index = 0;
-  //
-  //  for (int i = 0; i < 5; i++) {
-  //    Average = Average + Volts[i];
-  //  }
-  //  Average = Average / 5;
-  //
-  //  //Serial.print(F("Counts counts reads: ")); Serial.println(Counts);
-  //  //Serial.print(F("Calculated Volts reads: ")); Serial.println(Counts / 16.94);
-  //  return Average;
 }
 
 double ReadAmpTemp() {
