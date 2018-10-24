@@ -307,6 +307,7 @@ void loop() {
       }
     case ModePowerTurnedOn: {
         SubPowerTurnedOn(CurrentBand, RigPortNumber, RigModel, Mode, bHours, bMinutes, ulTimeout, Act_Byp);
+        Volts = ReadVoltage();  //Update so that we don't get a false beep the first time through the Display loop.
         break;
       }
     case ModeSwrError: {
