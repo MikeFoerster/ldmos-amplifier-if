@@ -41,9 +41,8 @@ byte PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel, bool
     if (RigPortNumber == 1) RigPortNumber = 2;
     else RigPortNumber = 1;
 
-    //Serial.print(F("Testing RigPortNumber: ")); Serial.println(RigPortNumber);
     RigModel = GetRigModel(RigPortNumber);  //Returns 1 or 2 when we establish comms
-    Serial.print(F("PowerUpRoutine RigModel Returned:  ")); Serial.println(RigModel);
+    //Serial.print(F("PowerUpRoutine RigModel Returned:  ")); Serial.println(RigModel);
   } while ((RigModel == 0) && ((millis() - StartTime) < 5000));
 
 
@@ -90,7 +89,8 @@ byte PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel, bool
 
   //Turn the power on to the Amplifier
   digitalWrite(PowerSwitchPin, ON);
-  delay(2500);  //Allow time for the Power Supply to come up to voltage
+  delay(2000);  //Allow time for the Power Supply to come up to voltage.  
+                // (Occasionally get a beep from the "Display" check if not long enough.)
 
   //Check the reading for the Volt Meter
   float Volts = ReadVoltage();
@@ -101,7 +101,6 @@ byte PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel, bool
     SendMorse("Pwr Volts");
     delay(2000);
     digitalWrite(PowerSwitchPin, OFF);
-    //Serial.print(F("Failed Power Up Voltage Test")); Serial.println(Volts);
     return 3;
   }
 
