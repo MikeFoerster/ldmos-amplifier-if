@@ -59,7 +59,7 @@
      NEED to Verify All Specifications.
 */
 
-#define  VERSION_ID  F("LDMOS 8-2018 1.9" )
+#define  VERSION_ID  F("LDMOS 8-2018 2.0" )
 
 #define DEBUG
 #include <EEPROM.h>
