@@ -75,10 +75,8 @@ void SubPowerTurnedOn(int &CurrentBand, byte &RigPortNumber, byte &RigModel, byt
   //Power Up Passed:
   //Change the Mode to normal Receive mode.
   Mode = ModeReceive;
-  //Serial.print(F("Using PortNumber: ")); Serial.println(RigPortNumber);
   //Initialize the Time:
   bHours = EEPROMReadInt(iHoursEeprom);
-  //Serial.print(F("ModePowerTurnedOn Read time as: ")); Serial.print(bHours);
   bMinutes = 0;
   //Calculate the Timeout Time with the current Hours and Minutes:
   CalculateTimeout(bHours, bMinutes, ulTimeout);
@@ -161,8 +159,6 @@ void SubReceive(int CurrentBand, bool &Act_Byp, bool &FirstTransmit) {
     //INVALID Band, set amp to Bypass Mode
     Act_Byp = 0;
     Bypass(Act_Byp);
-    //Serial.print(F("  Set to Bypass for Band: ")); Serial.println(CurrentBand);
-    //Serial.println(F("           Set to Active."));
   }
   FirstTransmit = true;
 }
