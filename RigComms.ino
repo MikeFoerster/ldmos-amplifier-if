@@ -120,10 +120,9 @@ unsigned int ReadTheFrequency(byte RigPortNumber) {
 unsigned int ReadThePower(byte RigPortNumber) {
   String Power = RadioCommandResponse("PC;", RigPortNumber);
 
-  Serial.print(F("  String Power Read as: ")); Serial.println(Power);
+  //Serial.print(F("  String Power Read as: ")); Serial.println(Power);
   //Convert the Power Reading to an Integer:
   unsigned int iPower = Power.substring(3, 5).toInt();
-
   return iPower;
 }
 
@@ -201,7 +200,7 @@ void RigPowerOff(byte RigPortNumber) {
     delay(100);
     Response = RadioCommandResponse("PC0;", RigPortNumber);
   }
-  Serial.print(F("Power Off returned: ")); Serial.println(Response);
+  //Serial.print(F("Power Off returned: ")); Serial.println(Response);
   //Close the external Serial Ports...
   Serial1.end();
   Serial2.end();
