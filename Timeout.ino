@@ -18,8 +18,6 @@ void TimeUpdate(byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte &Mo
   if (Seconds <= 0) {
     //Call the Off Routine to set into Off mode.
     OffRoutine(Mode);
-    //When we Timeout, also turn off the radio and close the Comm Ports.
-    RigPowerOff(RigPortNumber);
   }
 
   //Less than 10 Minutes, Sound the Beep: (Use Hours < 1 in case bHours goes negative.
