@@ -1,6 +1,30 @@
 ﻿Test Procedure for LDMOS Amplifier Interface
 
-POWER UP:
+Test Controller Version: ___________
+
+                   Date:______________
+
+CONNECTIONS:
+ K3:
+  Amplifier Input to K3 Output.
+  Amplifier Output to ANTENNA (Verify this connection carefully!)
+  Amplifier PTT Input to K3 PTT Output (rear panel, leftmost connector, RCA, NOT the PTT, 2nd left connector.)
+  Comms cable from P3 (top connector) to LDMOS Amplifer Controller Comm input (either Comm1 or Comm2) using Adapter.
+
+ KX3:
+  Amplifier Input to KX3 Output.
+  Amplifier Output to ANTENNA (Verify this connection carefully!)
+  Amplifier PTT Input to KX3 PTT Output (Using small adapter from ACC2 to RCA "Amp" adapter.)
+  Comms cable from ACC1 connector to LDMOS Amplifer Controller Comm input (either Comm1 or Comm2).
+
+ LDMOS Amplifier Controller:
+  Set Program switch (Red tip) to Down position (Inhibit Programming).
+  Connect to 9v Power.
+  Disconnect USB Cable to computer
+  Connect 15 pin (blue) cable to back of Amplifier.
+  Connect 2 Pin Red/Black cable from pigtail on the back of the Controller to the Power Supply
+
+POWER On/Off:
 
 [ ] Boot up of Arduino from no power does not toggle any of the relays in the amplifier, or turn on the amplifier even briefly.
 
@@ -12,29 +36,48 @@ POWER UP:
    Verify “Receive” indication and correct (approximate) Temperature. 
    Verify 50v readout.
 
+[ ] With the Rig Off, press the Select button to enable the system.  When the system fails to detect the Rig, Power the Rig ON and press the Select button again.  Verify that the system comes on line OK. 
+
 [ ] With rig connected to first one comm port, then the other, verify the correct comm port, 1 or 2, are reported when the select button is pressed to turn the system on.
 
-[ ] Verify holding select button for 2 to 3 seconds will turn Arduino display and Amplifier off.  Verify CW Message "OFF".  Verify that the Rig also Turns Off.  Verify with both the KX3 and K3.
+[ ] Verify holding select button for 2 to 3 seconds will turn Arduino display and Amplifier off.  Verify CW Message "OFF".  (Ignore "To Keep Rig On, Push Left" message.) Verify that the Rig also Turns Off.  Verify with both the KX3 and K3.
 
-[ ] Press the Left button.  Verify that the last CW message is repeated.
+[ ] With system operating normally on valid band, Press and hold the Select Button.  When the Message appears, "To Keep Rig On, Push Left", press the Left Key.  Verify that the Rig does NOT turn off. Verify with both the KX3 and K3.
+
+[ ] With the system correctly running, after any error, press the Left button.  Verify that the last CW message is repeated.
 
 [ ] Connect to K3 and power up, verify from K3 menu that the KPA3 is in bypass mode.  Hold select button in for three seconds to power system down. Verify that the menu shows that the KPA3 is now in operating mode.
 
 [ ] With K3 connected, power off K3 first, manually.  Then hold select key to turn off Arduino. Verify error message indicating “K3 Amp Not On!”.
 
+[ ] With K3 Connected and system powered up, Press and Hold the Select Key to power system off. Turn on K3 again (not the Controller) and verify that the K3 KAT3 has been re-enabled and the Tune Power is set to 10 watts (Default.)
 
-BAND CHANGE:
+[ ] With KX3 Connected and system powered up, Press and Hold the Select Key to power system off. Turn on KX3 again (not the Controller) and verify that the KX3 Tune Power is set to 5 watts (Default.)
 
 [ ] Rig on, set to outside any ham band, press select button, should power up but say invalid band.  Verify Bypass mode.  Verify up button will not put it into operate mode.
 
-[ ] Rig on, set to 30 and 60 m band, press select button, should power up but say invalid band.  Verify Bypass mode.  Verify up button will not put it into operate mode.  Verify “Receive” and correct (approximate Temperature).
+[ ] Rig on, set to 30 and 60 m band, press select button got Band Power Setup.  Display should indicate invalid band.  Return to the Receive Mode and verify Bypass mode.  Verify up button will not put it into operate mode.  Verify “Receive” and correct (approximate Temperature).
+
+[ ] With system operating normally on valid band, turn off radio. Verify reasonable display response, indicating loss of communications with radio.  Repeat test for an invalid band.
+
+
+BAND CHANGE:
 
 [ ] With the amplifier in normal operating condition, transmit, then as soon as you release the microphone button, change bands. Verify that the band does not change for several seconds after the band change is complete.
+
+[ ] Enter Setup Rig Power mode.  Set each band to a different Power value. (Hint: Pressing the Right or Left buttons allows you to change the Band quickly.)  Rig on, set to each valid band.  Verify the Power and Tune Power are correctly set for each band.
+
+
+SWR READOUT TESTS:
+
+[ ] Transmit using a microphone and verify reasonable FWD/REF power readout.
+
+[ ] Set band on radio to 75 m. Change amplifier to Bypass mode.  Adjust frequency until rig SWR shows approximately 1.8:1 SWR.   Set Amplifier to Operate mode.  Verify display shows approximately 1.8:1 SWR on both tune and voice peaks.
 
 
 SWR ERROR:
 
-[ ] Trigger SWR error. Verify Error message on Display and CW message.  Press left button and verify amplifier shuts down, reboot, and comes up correctly.  Verify that the Rig does not turn off. Verify correct band.
+[ ] Trigger SWR error. (Hint: Use antenna where SWR is close to 2:1) Verify Error message on Display and CW message.  Press left button and verify amplifier shuts down, reboot, and comes up correctly.  Verify that the Rig does not turn off. Verify correct band on Power Up.
 
 
 FAN OPERATION:
@@ -65,13 +108,11 @@ SETUP POWER LEVELS:
 
 BYPASS MODE:
 
-[ ] With system set to a valid band, verify that you can press the Down button to change to Bypass mode, and the Up button to change to the Operate mode.
+[ ] With system set to a valid band, verify that you can press the Down button to change to Bypass mode (Amplify switch LED on the Amplifier turns OFF), and the Up button to change to the Operate mode (Amplify switch LED on the Amplifier turns ON).
 
-[ ] With system powered on, change rig from valid band to 60 m and verify that you cannot press the up button to put the system in to operate mode.  Must remain in bypass mode. Repeat for 30 m band.
+[ ] With system powered on, change rig from valid band to 60 m and verify that you cannot press the up button to put the system in to operate mode. System should beep once.  Must remain in bypass mode. Repeat for 30 m band.
 
 [ ] With rig on a valid band, tune to just outside the ham band.  Verify the amp goes into Bypass mode and cannot be changed to the Operate mode with the Up button.
-
-[ ] With system operating normally on valid band, turn off radio. Verify reasonable display response, indicating loss of communications with radio.  Repeat test for an invalid band.
 
 
 SETUP BYPASS/OPERATE:
@@ -91,6 +132,7 @@ SETUP BYPASS/OPERATE:
     Set rig different valid bands, verify that for each band the rig Display is automatically in  
       Operate mode.  Invalid Bands (30m & 60m) must be in Bypass and cannot be set to Operate.
 
+[ ] Set up for BYP/OPR set to Operate in the Setup Menu and Rig on a Valid Band, change to Bypass mode.  Change Bands to another Valid Band.  Verify that the rig automatically returns to the Operate Mode with a valid band change. 
 
 SETUP TIMEOUT:
 
@@ -99,14 +141,6 @@ SETUP TIMEOUT:
 [ ] Test set up timeout set to nine hours, eight hours, etc. Verify that the time correctly decrement‘s.
 
 [ ] After Time on the display has decrease normally, press the right button and verify that the system recovers to the correct timeout time.
-
-
-
-SWR READOUT TESTS:
-
-[ ] Transmit using a microphone and verify reasonable FWD/REF power readout.
-
-[ ] Set band on radio to 75 m. Change amplifier to Bypass mode.  Adjust frequency until rig SWR shows approximately 1.8:1 SWR.   Set Amplifier to Operate mode.  Verify display shows approximately 1.8:1 SWR on both tune and voice peaks.
 
 
 OPERATIONAL TESTS:
