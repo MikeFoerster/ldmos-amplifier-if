@@ -119,7 +119,7 @@ const int TempReadout = A3;
 const int TempInternal = A4;
 
 //byte Mode;
-  // 0 is used to know we just went through Setup(), loop() resets to "ModeOff" on startup.
+// 0 is used to know we just went through Setup(), loop() resets to "ModeOff" on startup.
 const byte ModeOff = 1;
 const byte ModePowerTurnedOn = 2;  //Power was just turned on, need to initialize.
 const byte ModeSwrError = 3;     //Bypass mode until corrected, Power Cycle to Reset.
@@ -132,7 +132,7 @@ const byte ModeSetupPwrTimeout = 9; //We are in Setup Mode, adjust the Power Off
 const byte ModeSetupBypOperMode = 10;  //Select if on Power Up if we start in Bypass or Amplify mode.
 
 //Changes the speed of the Morse Code Error Indications.
-int tempo = 65;  
+int tempo = 75;
 
 // SendMorse is used for Error indications
 //Declared here to allow for an optional "bool Repeat = default" argument (in the MorseCode file).
@@ -188,17 +188,17 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print(VERSION_ID);
   delay(1500);
-  
+
   //Display the FanCounter
   int FanCounter = EEPROMReadInt(iFanCount);
   lcd.setCursor(0, 1);
   lcd.print("Fan Count " + String(FanCounter) + "     ");
   delay(1000);  //Leave it up 2 seconds.
-  
+
   lcd.setBacklight(0);  //Turn it off.
 
   //Use the OffRoutine to disable everything.
-  byte tmpMode =0; //Var required for OffRoutine
+  byte tmpMode = 0; //Var required for OffRoutine
   OffRoutine(tmpMode);
 
   //I had trouble initialzing the time, if it's greater than 9, put it back to 3 hours.
@@ -240,7 +240,7 @@ void loop() {
 
   //Used for Startup Only:
   if (Mode == 0) Mode = ModeOff;
-  
+
   if (Mode == ModeOff) {
     //Longer Delay
     delay(100);
@@ -264,9 +264,9 @@ void loop() {
     TemperatureReadTime = millis();
   }
 
-//#ifdef DEBUG
-//  PrintTheMode(Mode);
-//#endif
+  //#ifdef DEBUG
+  //  PrintTheMode(Mode);
+  //#endif
 
   //Check the buttons:
   HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp);
@@ -286,12 +286,15 @@ void loop() {
     if ((millis() - ulCommTime) > 2000) {
       //Check and update the Band.
       //if (CheckRigAI2Mode(RigPortNumber, CurrentBand, PowerSetting))
-      if (CheckBandUpdate(CurrentBand, RigPortNumber)) {
-        //Band change detected
 
-        //Read the data in Eeprom, should we start in Bypass-(0) or Operate-(1) mode?
-        Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
-        Bypass(Act_Byp);
+      if (Mode != ModeSetupBandPower) { //Don't Update for ModeSetupBandPower, it can change bands using the Left/Right buttons. 
+        if (CheckBandUpdate(CurrentBand, RigPortNumber)) {
+          //Band change detected
+
+          //Read the data in Eeprom, should we start in Bypass-(0) or Operate-(1) mode?
+          Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
+          Bypass(Act_Byp);
+        }
       }
       //Reset for the next cycle update: (Note: This is ALSO set during Transmit cycle)
       ulCommTime = millis();
@@ -326,7 +329,7 @@ void loop() {
         SubTransmit(FwdPower, RefPower, FirstTransmit, Swr, ulCommTime);
         break;
       }
-    case ModeOverTemp: {       
+    case ModeOverTemp: {
         //OverTemp was detected in the top of the Loop.
         //SubOverTemp(OverTemp, Mode);
         //  Only thing to do is to wait for Overtemp to clear.  It will clear when the Heat Sink cools down.
@@ -334,7 +337,7 @@ void loop() {
         break;
       }
     case ModeSetupBandPower: {
-      //Note: PowerSetting var is filled in from Buttons function, and passed back to here and into Display function.
+        //Note: PowerSetting var is filled in from Buttons function, and passed back to here and into Display function.
         //No Functionality, do not call.
         //SubSetupBandPower()
         break;
