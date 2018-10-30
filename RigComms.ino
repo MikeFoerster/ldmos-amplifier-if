@@ -70,9 +70,11 @@ bool K3AmpOnOff(byte RigPortNumber, bool OnOff) {
   bool Result;
 
   if (OnOff == 0) {
+    //Set K3 Internal Amp to Bypass:
     Response = RadioCommandResponse("MN055;MP007;", RigPortNumber);
   }
   else {
+    //Re-Enable the K3 Internal Amp.
     Response = RadioCommandResponse("MN055;MP008;", RigPortNumber);
   }
 
@@ -193,15 +195,15 @@ bool SetThePower(byte PowerValue, byte RigPortNumber) {
 
 void RigPowerOff(byte RigPortNumber) {
   //Returns true on failure
-  //Set Menu Command for Tune Power
+  //Turn Off Rig and Close Comm Ports
   String Response = RadioCommandResponse("PS0;", RigPortNumber);
   if (Response == "") {
     //Just in case the command fails, Try again...
     delay(100);
-    Response = RadioCommandResponse("PC0;", RigPortNumber);
+    Response = RadioCommandResponse("PS0;", RigPortNumber);
   }
   //Serial.print(F("Power Off returned: ")); Serial.println(Response);
-  //Close the external Serial Ports...
+  //WARNING: Do NOT use Serial[1 0r 2].End  It affects the P3 so that it becomes nearly un-responsive!
   Serial1.end();
   Serial2.end();
 }
