@@ -9,13 +9,13 @@ byte ReadBand(byte RigPortNumber) {
     CurrentBand = FreqToBand(TargetFreq);
   }
 
-//TRIED the "BN;" command, but reading the Frequency allows knowing when we are out of the valid Ham Bands
-//  //Read the BAND ("BN;") from the Radio and convert to Band (byte)
-//  unsigned int Band = ReadTheBand(RigPortNumber);  //Through RigComms
-//  //Serial.print(F("Target Freq: ")); Serial.println(TargetFreq);
-//  if (Band <= 10) {
-//    CurrentBand = BandNumberToBand(Band);
-//  }
+  //TRIED the "BN;" command, but reading the Frequency allows knowing when we are out of the valid Ham Bands
+  //  //Read the BAND ("BN;") from the Radio and convert to Band (byte)
+  //  unsigned int Band = ReadTheBand(RigPortNumber);  //Through RigComms
+  //  //Serial.print(F("Target Freq: ")); Serial.println(TargetFreq);
+  //  if (Band <= 10) {
+  //    CurrentBand = BandNumberToBand(Band);
+  //  }
 
   else {
     CurrentBand = 255; //Not a valid Frequency!!
@@ -220,7 +220,11 @@ int BumpPowerSetting(byte ReadIncDec, int CurrentBand) {
     int MaxPower = GetMaxPower(CurrentBand);
     //Verify that the new setting is NOT already Maximum value
     if (PowerSetting == GetMaxPower(CurrentBand)) {
-      return "Already Max Power"; //Return Error Message
+      //Error Message
+      lcd.setCursor(0, 1);
+      lcd.print("Already Max Power");
+      delay(1000);
+      return PowerSetting;
     }
     else {
       PowerSetting++;  //Increment the value
@@ -229,8 +233,12 @@ int BumpPowerSetting(byte ReadIncDec, int CurrentBand) {
   else if (ReadIncDec == 3) { //Decrement
     //Down
     //Verify that the new setting is NOT already Minimum value
-    if (PowerSetting == 0) {
-      return "Already Min Power"; //Return Error Message
+    if (PowerSetting == 1) {
+      //Error Message
+      lcd.setCursor(0, 1);
+      lcd.print("Already Min Power");
+      delay(1000);
+      return PowerSetting;
     }
     else {
       PowerSetting--; //Decrement the value
@@ -262,7 +270,7 @@ int GetMaxPower(int CurrentBand) {
     case i15m:  return 12; break; // 3 watts output
     case i12m:  return 12; break; // 3 watts output
     case i10m:  return 12; break; // 3 watts output
-    case i6m:   return  9; break; // 9 watts output, NO ATTENUATOR!
+    case i6m:   return  8; break; // 8 watts output, NO ATTENUATOR!
     default:    return  0; break; //Invalid Band.
   }
 }
