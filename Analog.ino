@@ -74,10 +74,19 @@ float CalculateSwr(float FwdPower, float RefPower) {
 
 float ReadVoltage() {
   //Returns Voltage
-  
+  static int LastCounts;
+
   //Take the Voltage Reading:
   int Counts = analogRead(A0);
-  return (float(Counts) / 16.94);
+
+  //Minimize the Display bobble:
+  if (abs(Counts - LastCounts) > 3) {
+    LastCounts = Counts;
+    return (float(Counts) / 16.94);
+  }
+  else {
+    return (float(LastCounts) / 16.94);
+  }
 }
 
 double ReadAmpTemp() {
@@ -112,12 +121,12 @@ void SetFanSpeed(double InternalTemp) {
   }
   else if (InternalTemp >= 100) {
     analogWrite(iFanPwmPin, 200); //Medium
-    Serial.println(F("Set Fan to 150"));
+    Serial.println(F("Set Fan to 200"));
     SendMorse("Fan 2 ");
   }
   else if (InternalTemp >= 95) {
     analogWrite(iFanPwmPin, 150);  //Slow
-    Serial.println(F("Set Fan to 100"));
+    Serial.println(F("Set Fan to 150"));
     SendMorse("Fan3 ");
     //Does the fan ever come on?  Keep track of it for a while:
     int FanCounter = EEPROMReadInt(iFanCount);
