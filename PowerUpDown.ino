@@ -142,8 +142,77 @@ void OffRoutine(byte &Mode) {
   SendMorse("Off ");
   //Set the Mode to ModeOff
   Mode = ModeOff;
+
+  //WARNING: Do NOT use Serial[1 0r 2].End  It affects the P3 so that it becomes nearly un-responsive!
 }
 
+void RigPowerDownRoutine(int RigPortNumber, byte RigModel) {
+  //For the K3, Re-enable the KPA3 internal amplifier.
+    //  We only go through this once!!!
+    lcd.display();
+    lcd.setBacklight(1);  //ON
+    if (RigModel == 1) {
+      //Turn the K3 Internal Amp Back ON.
+      if (K3AmpOnOff(RigPortNumber, OFF)) {
+        lcd.setCursor(0, 0);
+        lcd.print("K3 Amp NOT RESET ");  //Display the Error
+        SendMorse("No Rig ");
+        delay(200);
+        //This is not a critical fault, but Setting the K3 KPA3 amp to BYPASS assures us that we can't overdrive the LDMOS amp.
+        // In this case, it was not Re-Enabled.
+
+        //Set Tune Power to 10 Watts for the K3.
+        if (SetTunePower(10, RigPortNumber)) {
+          //SetTunePower Failed
+          lcd.setCursor(0, 1);
+          lcd.print("Reset Tune Fail ");
+          SendMorse("Tune Err");
+        }
+      }
+    }
+    else {  //KX3:
+      //Set Tune Power to 5 Watts for the KX3.
+      if (SetTunePower(5, RigPortNumber)) {
+        lcd.setCursor(0, 0);
+        lcd.print("Reset Tune Fail ");  //Display the Error
+        //SetTunePower Failed
+        SendMorse("Tune Err");
+        delay(2000);
+      }
+    }
+
+    //Allow the Rig to NOT be turned Off (Press Left Key)
+    lcd.setCursor(0, 0);
+    lcd.print("To Keep Rig On  ");
+    lcd.setCursor(0, 1);
+    lcd.print("Push Left Button");
+
+    unsigned long WaitTime = millis();
+
+    int CurrentBand = 255;
+    //Variables needed for arguments, but not used:
+    byte Mode = ModeOff;
+    unsigned long ulTimeout = 0;
+    byte bHours = 0;
+    byte bMinutes = 0;
+    bool Act_Byp = 0;
+    do {
+      delay(50);
+      HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp);
+    } while (((millis() - WaitTime) < 5000) && (CurrentBand == 255));
+    
+    //If HandleButtons returned CurrentBand == 200, then DON'T turn off the Rig.
+    if (CurrentBand != 200) {
+      //When we Timeout, also turn off the radio and close the Comm Ports.
+      RigPowerOff(RigPortNumber);
+    }
+
+    //Turn off the display.
+    lcd.setBacklight(0);
+    lcd.setCursor(0, 0);
+    lcd.noDisplay();
+    lcd.setBacklight(0);
+}
 
 void PrintTheMode(byte Mode) {
   //This is a Debug Routine...
