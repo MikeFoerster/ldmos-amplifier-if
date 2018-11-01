@@ -164,7 +164,6 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             Bypass(Act_Byp);  //Set from Operate to Bypass
             break;
           }
-
         case ModeSetupBandPower: {
             //Down Button pressed, Decreement the Power by 1 watt:
             byte Decrement = 3;  //Setup to Decrement the BumpPowerSetting using the "3". Also writes to Eeprom.
@@ -190,13 +189,31 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
 
     //LEFT
     if (buttons & BUTTON_LEFT) {
-      if (Mode == ModeSwrError) {
-        //User pressed the SELECT button, change mode to Reset the Amp.
-        Mode = ModeSwrErrorReset;
-      }
-      else {
-        //Repeat the last Error from the SendMorse Error message:
-        SendMorse("", true);
+      switch (Mode) {
+        case ModeOff: {
+            //Use the CurrentBand set to 200 to indicate to NOT turn off the Rig in "Subs".
+            CurrentBand = 200;
+            break;
+          }
+        case ModeSwrError: {
+            //User pressed the SELECT button, change mode to Reset the Amp.
+            Mode = ModeSwrErrorReset;
+            break;
+          }
+        case ModeSwrErrorReset: {
+            //Do Nothing (Keeps from Repeating the "SendMorse").
+            break;
+          }
+        case ModeSetupBandPower: {
+            //Cycle the Band Up to 6m, then drop back down to 160.
+            if (CurrentBand > i160m)        CurrentBand = CurrentBand - 2;
+            else CurrentBand = i6m;
+            break;
+          }
+        default: {
+            //Repeat the last Error from the SendMorse Error message:
+            SendMorse("", true);
+          }
       }
     }
 
@@ -208,6 +225,11 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
         bMinutes = 0;
         //Recalculate the Timeout after the adjustment.
         CalculateTimeout(bHours, bMinutes, ulTimeout);
+      }
+      if (Mode == ModeSetupBandPower) {
+        //Cycle the Band Up to 6m, then drop back down to 160.
+        if (CurrentBand < i6m)        CurrentBand = CurrentBand + 2;
+        else CurrentBand = i160m;
       }
     }
   }  //End of if (buttons)
@@ -223,10 +245,6 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
         //2 Second SELECT button turns the unit OFF.
         OffRoutine(Mode);
         bWriteComplete = true;
-        //When we turn the system off, also turn off the radio:
-        Serial.print(F("CAlling RigPowerOff for Comm: ")); Serial.println(RigPortNumber);
-        //Turn the Rig Off and Close the Comm Ports. 
-        RigPowerOff(RigPortNumber);
       }
     }
   }
