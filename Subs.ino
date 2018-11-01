@@ -1,41 +1,24 @@
 //This file is mostly Sub calls from Main():
 
-
-void SubOff(byte &RigModel, byte RigPortNumber, byte &bHours, byte &bMinutes, bool &Act_Byp, int &CurrentBand) {
+void SubOff(byte &RigModel, byte &RigPortNumber, byte &bHours, byte &bMinutes, bool &Act_Byp, int &CurrentBand) {
   //System is off.
   //Power to the Amp is Off.
   //Display is blank.
-  //Auto-Detect Mode: Monitor for Power Up Switch indication using Voltage?
 
-  //For the K3, Re-enable the KPA3 internal amplifier.
-  //  We only go through this once!!!
-  if (RigModel == 1) {
-    //Turn the K3 Internal Amp Back ON.
-    if (K3AmpOnOff(RigPortNumber, OFF)) {
-      lcd.setCursor(0, 1);
-      lcd.print("K3 Amp NOT ON!  ");  //Display the Error
-      SendMorse("No Rig ");
-      //This is not a critical fault, but Setting the K3 KPA3 amp to BYPASS assures us that we can't overdrive the LDMOS amp.
-      // In this case, it was not Re-Enabled.
-    }
+  //First time thru, Reset Rig Amp and Tune Power to default, Turn off the Rig and clear the variables.
+  if (RigModel) {
+    //Run the RigPowerDownRoutine to as to turn rig off (in PowerUpDown tab).
+    RigPowerDownRoutine(RigPortNumber, RigModel);
+    //Finally, turn off some of the variables
+    bHours = 0;
+    bMinutes = 0;
+    Act_Byp = 0;
+    CurrentBand = 255;
+    RigPortNumber = 0;
+    //Clear the RigModel variable so we no longer write to the K3:
+    RigModel = 0;
   }
-  //Clear the RigModel variable so we no longer write to the K3:
-  RigModel = 0;
-  //Turn the time OFF.
-  bHours = 0;
-  bMinutes = 0;
-  Act_Byp = 0;
-  CurrentBand = 0;
-
-  //Not sure if I want this...
-  //        Volts = ReadVoltage();
-  //        Serial.print(F("Volts = ")); Serial.println(Volts);
-  //        if (Volts > 30) {
-  //          //Manual Power Up Detected!
-  //          //Change Mode to ModePowerTurnedOn.
-  //          Mode = ModePowerTurnedOn;
-  //          //Problem is, it may cycle Display On and Off!!!
-  //        }
+  //WARNING: Do NOT use Serial[1 0r 2].End  It affects the P3 so that it becomes nearly un-responsive!
 }
 
 void SubPowerTurnedOn(int &CurrentBand, byte &RigPortNumber, byte &RigModel, byte &Mode, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, bool &Act_Byp) {
@@ -128,22 +111,29 @@ void SubSwrError(bool &SwrFailMessage, bool &Act_Byp) {
 
 void SubSwrErrorReset(int &CurrentBand, byte &Mode, bool &Act_Byp, byte &RigPortNumber, byte &RigModel) {
   //User pressed the Select button
-  // Cycle the Power
+  // Cycle the Power OFF then ON Again.
+
+  //We turn off the Amp, but we don't actually execute the ModeOff,
+  //  so we won't turn off the Rig, because we don't leave this routine.
   OffRoutine(Mode);
+
+  //Make sure we are in Bypass mode.
   Act_Byp = 0;
-  Bypass(Act_Byp);  //Make sure we are in Bypass mode.
-  delay(7000);  //Wait 7 seconds
+  Bypass(Act_Byp);
+
+  //Wait 5 seconds
+  delay(5000);
   byte PowerUpResponse = PowerUpRoutine(CurrentBand, RigPortNumber, RigModel, Act_Byp);
   if (PowerUpResponse == 1) {
-        //FAILED, Didn't establish Comms again:
-        lcd.setCursor(0, 1);
-        lcd.print("No Comm with Rig");
-        delay(2000);
-        //Turn the Mode back off...
-        Mode = ModeOff;
-        return;
+    //FAILED, Didn't establish Comms again:
+    lcd.setCursor(0, 1);
+    lcd.print("No Comm with Rig");
+    delay(2000);
+    //Turn the Mode back off...
+    Mode = ModeOff;
+    return;
   }
-  
+
   //Finally, change the mode to Receive.
   Mode = ModeReceive;  //?? Is there something else that should change the Mode to Receive?????
 }
