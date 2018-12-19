@@ -85,7 +85,9 @@ bool CheckBandUpdate(int &CurrentBand, byte RigPortNumber) {
 
       //Serial.println(F("Calling UpdateBandPower!"));
       //Set the Power for the Rig to the Power Value stored in Eeprom
-      UpdateBandPower(CurrentBand, RigPortNumber);
+      if (UpdateBandPower(CurrentBand, RigPortNumber)) {
+        //Set for Continous beep for failed UpdateBandPower???
+      }
       return true;
     }
   }
@@ -103,18 +105,14 @@ bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
   //Get the Maximum Power for this band:
   int MaxPower = GetMaxPower(CurrentBand);
 
-  //Serial.print(F("  Changing Band to: ")); Serial.println(CurrentBand);
-  //Serial.print(F("  PowerValue: ")); Serial.println(PowerValue);
   //Check for valid value in Eeprom
-  if ((PowerValue < 0) || (PowerValue > MaxPower))  {
+  if ((PowerValue <= 0) || (PowerValue > MaxPower))  {
     if (CurrentBand <= i6m) {  //Valid Band (Otherwise it would do this for 30 & 60m)
       //No valid value, set to 1 watt
       PowerValue = 1;
       //Write the value to the Eeprom location for this band.
       EEPROMWriteInt(CurrentBand, PowerValue);
-      //Serial.print(F("  Failed PowerValue: ")); Serial.println(PowerValue);
     }
-    return false;
   }
 
   //Set the Power to the Rig using the "PCxxx" command.
@@ -122,16 +120,17 @@ bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
   if (SetThePower(PowerValue, RigPortNumber)) {
     //Command Failed...
     SendMorse("Pwr Err");
+    return true;
   }
   if (SetTunePower(PowerValue, RigPortNumber)) {
     //SetTunePower Failed
     //Serial.println(F("SetTunePower Failed from Band file."));
     SendMorse("Tune Err");
+    return true;
   }
 
   //Check the Eeprom setting, set to Operate or Bypass
-  if (EEPROMReadInt(iBypassModeEeprom) == 0) Bypass(0); //Set to Bypass Mode
-  else Bypass(1);  //Set to Operate Mode
+  Bypass(EEPROMReadInt(iBypassModeEeprom)); //Set to Operate(1) or Bypass (0) Mode
 
   return false;
 }
