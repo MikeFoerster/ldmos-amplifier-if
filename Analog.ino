@@ -1,36 +1,48 @@
 
-void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float &Volts, byte &Mode) {
+void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float &Volts, double &AmpTemp, byte &Mode, String ErrorString) {
   //Check for Mode Changes & update TransmitLED and Voltmeter...
-  OverTemp = digitalRead(OverTempLedPin);
-  //Serial.print(F("OverTemp Status = ")); Serial.println(OverTemp);
+
   //OverTemp
-  if ((OverTemp == false) && (Mode != ModeOverTemp)) {
-    Mode = ModeOverTemp;  //Have to wait for temp to come down.
-  }
+  OverTemp = digitalRead(OverTempLedPin);
+  if ((OverTemp == false) && (Mode != ModeOverTemp)) Mode = ModeOverTemp;  //Have to wait for temp to come down.
+  else if ((OverTemp == true) && (Mode == ModeOverTemp)) Mode = ModeReceive;  //Temp has come down.
 
   //Test the SWR Fail input
   if (!(digitalRead(SwrFailLedPin))) {
     //Serial.println(F("SWR Fail!!!"));
-    Mode = ModeSwrError;  //Have to cycle power to recover.
+    Mode = ModeSwrError;  //Have to cycle power from Left button press, to recover.
   }
 
   //Update between Receive and Transmit.
   TransmitIndication = digitalRead(XmtLedPin);
-  //Serial.print(F("Trans Ind Status = ")); Serial.println(TransmitIndication);
   if ((TransmitIndication == false) && (Mode == ModeReceive)) Mode = ModeTransmit;
   else if ((TransmitIndication == true) && (Mode == ModeTransmit)) Mode = ModeReceive;
 
   //Update the reading for the Volt Meter
   Volts = ReadVoltage();
+  //Check for Low Voltage (Perhaps one supply failed?)
+  if (Volts < 37) {
+    //Error only after the 5th time, otherwise may get false errors on startup.
+    ErrorString = String(Volts) +  "v  LOW VOLTS!";
+    Mode = ModeError;
+  }
+  else if (Volts > 52) {
+    //Error only after the 5th time, otherwise may get false errors on startup.
+    ErrorString = String(Volts) +  "v HIGH VOLTS!";
+    Mode = ModeError;
+  }
+
+  //Read the amplifier temp.
+  AmpTemp = ReadAmpTemp();
 }
 
-void ReadPower(int &FwdPower, int &RefPower, bool NewValue) {
+void ReadPower(int &FwdPower, int &RefPower, bool FirstTransmit) {
   static int Fwd[5];
   static int Ref[5];
   static int Index;
 
   //First press of the transmit, clear the array (memset didn't seem to work!)
-  if (NewValue) {
+  if (FirstTransmit) {
     for (int i = 0; i < 5; i++) {
       Fwd[i] = 0;
       Ref[i] = 0;
