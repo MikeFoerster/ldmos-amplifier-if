@@ -122,14 +122,15 @@ const int TempInternal = A4;
 // 0 is used to know we just went through Setup(), loop() resets to "ModeOff" on startup.
 const byte ModeOff = 1;
 const byte ModePowerTurnedOn = 2;  //Power was just turned on, need to initialize.
-const byte ModeSwrError = 3;     //Bypass mode until corrected, Power Cycle to Reset.
+const byte ModeSwrError = 3;       //Bypass mode until corrected, Power Cycle to Reset.
 const byte ModeSwrErrorReset = 4;  //User pressed button to reset Power from ModeSwrError.
-const byte ModeReceive = 5;        //Amp is ready to go, but not currently transmitting.
-const byte ModeTransmit = 6;  //Transmit Detected, Update FWD/REF SWR as well as voltage.
-const byte ModeOverTemp = 7;  //OverTemp is active, need to wait for Amp to Cool Down. Dictated by Amp Control board.
-const byte ModeSetupBandPower = 8; //We are in Setup Mode, Adjust Per-Band Power setting (to Eeprom)
-const byte ModeSetupPwrTimeout = 9; //We are in Setup Mode, adjust the Power Off Timeout.
-const byte ModeSetupBypOperMode = 10;  //Select if on Power Up if we start in Bypass or Amplify mode.
+const byte ModeError = 5;          //Error Investigation Mode, Comms Fault, Volts Hi/Lo, etc.
+const byte ModeReceive = 6;        //Amp is ready to go, but not currently transmitting.
+const byte ModeTransmit = 7;       //Transmit Detected, Update FWD/REF SWR as well as voltage.
+const byte ModeOverTemp = 8;       //OverTemp is active, need to wait for Amp to Cool Down. Dictated by Amp Control board.
+const byte ModeSetupBandPower = 9; //We are in Setup Mode, Adjust Per-Band Power setting (to Eeprom)
+const byte ModeSetupTimeout = 10;  //We are in Setup Mode, adjust the Power Off Timeout.
+const byte ModeSetupBypOper = 11;  //Select if on Power Up if we start in Bypass or Amplify mode.
 
 //Changes the speed of the Morse Code Error Indications.
 int tempo = 75;
@@ -189,17 +190,17 @@ void setup() {
   lcd.print(VERSION_ID);
   delay(1500);
 
-  //Display the FanCounter
+  //Display the FanCounter, this is here just to see if I really need the fan!  I don't think that I do.
   int FanCounter = EEPROMReadInt(iFanCount);
   lcd.setCursor(0, 1);
   lcd.print("Fan Count " + String(FanCounter) + "     ");
-  delay(1000);  //Leave it up 2 seconds.
+  delay(1000);  //Leave it up 1 second.
 
-  lcd.setBacklight(0);  //Turn it off.
+  lcd.setBacklight(0);  //Turn it off.  We will turn it back on when we power up for operation.
 
   //Use the OffRoutine to disable everything.
   byte tmpMode = 0; //Var required for OffRoutine
-  OffRoutine(tmpMode);
+  OffRoutine(tmpMode, 1);
 
   //I had trouble initialzing the time, if it's greater than 9, put it back to 3 hours.
   if (EEPROMReadInt(iHoursEeprom) > 9) {
@@ -222,50 +223,37 @@ void loop() {
   bool TransmitIndication;
   bool OverTemp;
   bool SwrFail;
-  bool SwrFailMessage;
-  bool PowerSwitch;
   static byte RigPortNumber;
   static unsigned long TemperatureReadTime;
-  static double InternalTemp;
-  static double AmpTemp;
+  double AmpTemp;              //Removed static declaration
   static int CurrentBand;
   static byte bHours;
   static byte bMinutes;
   static unsigned long ulTimeout;
   static unsigned long ulCommTime;
-  static unsigned long ulCommWait;
   static byte RigModel;  //0 = None, 1 = K3, 2 = KX3
   static bool FirstTransmit;
   static byte Mode;
+  static String ErrorString;
+
+  //unsigned long LoopTime = millis();
+
+  //Look Into and Understand SwrFailMessage
+  //  Ok to remove 'static' from AmpTemp?
+  // moved declaration for 'double InternalTemp', removed 'static'
 
   //Used for Startup Only:
   if (Mode == 0) Mode = ModeOff;
 
-  if (Mode == ModeOff) {
-    //Longer Delay
-    delay(100);
-  }
-  else if (Mode >= ModeTransmit) {
-    // Very Short Delay for FWD, REF, and system reponse
-    delay(5);
-  }
-  else {
-    //If Not Off, Update the time.  (When Time Expires, will change to OFF mode.)
-    TimeUpdate(bHours, bMinutes, ulTimeout, Mode, RigPortNumber);
-  }
-
-  //No matter what the mode is, Read Internal Temp every 10 seconds
-  //  and turn on the fan if necessary:
-  if ((millis() - TemperatureReadTime) > 10000) {
-    //Reads internal temp and turns on the fan if necessary:
-    InternalTemp = ReadInternalTemp(); //Serial.print(F("Internal Temp: ")); Serial.println(InternalTemp);
-
+  //Read Internal Temp every 20 seconds and turn on the fan if necessary:
+  if ((millis() - TemperatureReadTime) > 20000) {
+    double InternalTemp = ReadInternalTemp();
     //Reset for the next 10 seconds:
     TemperatureReadTime = millis();
   }
 
   //#ifdef DEBUG
-  //  PrintTheMode(Mode);
+  PrintTheMode(Mode);
   //#endif
 
   //Check the buttons:
@@ -274,29 +262,25 @@ void loop() {
   //Run a few checks...
   if (Mode >= ModeReceive ) {  //Running
     //Status Checks
-    //  OverTemp will change Mode to ModeOverTemp
-    //  SwrFail will change Mode to ModeSwrError
-    //  TransmitIndication will change Mode to ModeTransmit or ModeReceive
-    StatusChecks(OverTemp, SwrFail, TransmitIndication, Volts, Mode);
-
-    AmpTemp = ReadAmpTemp();  //Read the amplifier temp.
+    //  OverTemp: Change Mode to ModeOverTemp, or back to Receive when it clears.
+    //  SwrFail: Change Mode to ModeSwrError (Press Left Button to Power Cycle to clear)
+    //  TransmitIndication: Change Mode to ModeTransmit or ModeReceive
+    //  Volts - Check for over/under voltage
+    StatusChecks(OverTemp, SwrFail, TransmitIndication, Volts, AmpTemp, Mode, ErrorString);
 
     //Check the Band every few seconds...
-    // NOTE: We reset the ulCommTime during transmit so we wait the full time AFTER transmit before checking!
     if ((millis() - ulCommTime) > 2000) {
       //Check and update the Band.
       //if (CheckRigAI2Mode(RigPortNumber, CurrentBand, PowerSetting))
-
-      if (Mode != ModeSetupBandPower) { //Don't Update for ModeSetupBandPower, it can change bands using the Left/Right buttons. 
+      if (Mode != ModeSetupBandPower) { //Don't Update for ModeSetupBandPower, it can change bands using the Left/Right buttons.
         if (CheckBandUpdate(CurrentBand, RigPortNumber)) {
           //Band change detected
-
-          //Read the data in Eeprom, should we start in Bypass-(0) or Operate-(1) mode?
+          //Read the data in Eeprom, should we start in Bypass(0) or Operate(1) mode?
           Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
           Bypass(Act_Byp);
         }
       }
-      //Reset for the next cycle update: (Note: This is ALSO set during Transmit cycle)
+      //Reset for the next cycle update: (Note: This is ALSO set during Transmit cycle so we don't update during TX)
       ulCommTime = millis();
     }
   }
@@ -305,21 +289,49 @@ void loop() {
   //Update as required depending on the Mode
   switch (Mode) {
     case ModeOff: {
-        SubOff(RigModel, RigPortNumber, bHours, bMinutes, Act_Byp, CurrentBand);
+        //First time thru, Reset Rig Amp and Tune Power to default, Turn off the Rig and clear the variables.
+        //  Check for Errorstring is to see if the previous mode was ModeError.
+        if (RigModel || (ErrorString != "")) {
+
+          //If not ModeError, then ask about turning the Rig Off.
+          if (ErrorString == "") {
+            SubOff(RigModel, RigPortNumber);
+          }
+
+          //Finally, turn off some of the variables
+          //Note: Not added to SubOff just because I didn't want to pass all the variables...
+          bHours = 0;
+          bMinutes = 0;
+          Act_Byp = 0;
+          CurrentBand = 255;
+          RigPortNumber = 0;
+          //Clear the RigModel variable so we no longer write to the K3:
+          RigModel = 0;
+          ErrorString = "";
+          //WARNING: Do NOT use Serial[1 0r 2].End  It affects the P3 so that it becomes nearly un-responsive!  (???)
+        }
+
+        delay(100);
         break;
       }
     case ModePowerTurnedOn: {
-        SubPowerTurnedOn(CurrentBand, RigPortNumber, RigModel, Mode, bHours, bMinutes, ulTimeout, Act_Byp);
+        SubPowerTurnedOn(CurrentBand, RigPortNumber, RigModel, Mode, bHours, bMinutes, ulTimeout, Act_Byp, ErrorString);
         Volts = ReadVoltage();  //Update so that we don't get a false beep the first time through the Display loop.
         break;
       }
     case ModeSwrError: {
+        bool SwrFailMessage;
         SubSwrError(SwrFailMessage, Act_Byp);
         break;
       }
     case ModeSwrErrorReset: {
         SubSwrErrorReset(CurrentBand, Mode, Act_Byp, RigPortNumber, RigModel);
         break;
+      }
+    case ModeError: {
+        SubError();
+        //Consider turning off AC Power for Voltage Fail, High or Low.
+        //How do we EXIT ModeError???
       }
     case ModeReceive: {
         SubReceive(CurrentBand, Act_Byp, FirstTransmit);
@@ -331,22 +343,19 @@ void loop() {
       }
     case ModeOverTemp: {
         //OverTemp was detected in the top of the Loop.
-        //SubOverTemp(OverTemp, Mode);
         //  Only thing to do is to wait for Overtemp to clear.  It will clear when the Heat Sink cools down.
-        if (OverTemp == 1) Mode = ModeReceive;
+        //Cleared back to Receive in StatusChecks() routine.
         break;
       }
     case ModeSetupBandPower: {
         //Note: PowerSetting var is filled in from Buttons function, and passed back to here and into Display function.
-        //No Functionality, do not call.
-        //SubSetupBandPower()
         break;
       }
-    case ModeSetupPwrTimeout: {
+    case ModeSetupTimeout: {
         //User is in Setup Mode: Changing the Power Off Timeout value (up to 10 Hours)
         break;
       }
-    case ModeSetupBypOperMode: {
+    case ModeSetupBypOper: {
         //Select if we will Power Up in Bypass or Operate Mode (stored in Eeprom)
         break;
       }
@@ -354,8 +363,10 @@ void loop() {
 
   }  //End of switch(Mode)
 
+  //Serial.print(F("ErrorString = ")); Serial.println(ErrorString);
+  //  Serial.print(F("Before Display: ")); Serial.println(millis() - LoopTime);
   //UpdateDisplay takes ~200ms
-  UpdateDisplay(Mode, CurrentBand, FwdPower, RefPower, Swr, Volts, Act_Byp, AmpTemp, bHours, bMinutes);
+  UpdateDisplay(Mode, CurrentBand, FwdPower, RefPower, Swr, Volts, Act_Byp, AmpTemp, bHours, bMinutes, ErrorString);
 
+  //Serial.print(F("Looptime: ")); Serial.println(millis() - LoopTime);
 }  //End of Main Loop()
-

@@ -17,7 +17,7 @@ void TimeUpdate(byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte &Mo
   //Check for Timeout: (TimeoutTime is stored in Seconds)
   if (Seconds <= 0) {
     //Call the Off Routine to set into Off mode.
-    OffRoutine(Mode);
+    OffRoutine(Mode, 1);
   }
 
   //Less than 10 Minutes, Sound the Beep: (Use Hours < 1 in case bHours goes negative.

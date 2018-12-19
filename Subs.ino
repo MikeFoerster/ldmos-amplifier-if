@@ -1,50 +1,40 @@
 //This file is mostly Sub calls from Main():
 
-void SubOff(byte &RigModel, byte &RigPortNumber, byte &bHours, byte &bMinutes, bool &Act_Byp, int &CurrentBand) {
+void SubOff(byte &RigModel, byte &RigPortNumber) {
+  //Called ONLY if RigModel is > 0.
   //System is off.
   //Power to the Amp is Off.
   //Display is blank.
 
-  //First time thru, Reset Rig Amp and Tune Power to default, Turn off the Rig and clear the variables.
-  if (RigModel) {
-    //Run the RigPowerDownRoutine to as to turn rig off (in PowerUpDown tab).
-    RigPowerDownRoutine(RigPortNumber, RigModel);
-    //Finally, turn off some of the variables
-    bHours = 0;
-    bMinutes = 0;
-    Act_Byp = 0;
-    CurrentBand = 255;
-    RigPortNumber = 0;
-    //Clear the RigModel variable so we no longer write to the K3:
-    RigModel = 0;
-  }
-  //WARNING: Do NOT use Serial[1 0r 2].End  It affects the P3 so that it becomes nearly un-responsive!
+  //Run the RigPowerDownRoutine to as to turn rig off (in PowerUpDown tab).
+  RigPowerDownRoutine(RigPortNumber, RigModel);
+
 }
 
-void SubPowerTurnedOn(int &CurrentBand, byte &RigPortNumber, byte &RigModel, byte &Mode, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, bool &Act_Byp) {
+void SubPowerTurnedOn(int &CurrentBand, byte &RigPortNumber, byte &RigModel, byte &Mode, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, bool &Act_Byp, String &ErrorString) {
   //Power On was just detected on the push buttons.
   //Attempt to establish communications with the radio (either K3 or KX3)
   byte PwrUpResponse = PowerUpRoutine(CurrentBand, RigPortNumber, RigModel, Act_Byp);
   switch (PwrUpResponse) {
     case 1: {
         //FAILED, Didn't establish Comms:
-        lcd.setCursor(0, 1);
-        lcd.print("No Comm with Rig");
-        delay(2000);
-        //Turn the Mode back off... (but we didn't call OffRoutine, so the display stays with the message.)
-        Mode = ModeOff;
+        ErrorString = "No Comm with Rig";
+        Mode = ModeError;
         return;
         break;
       }
     case 2: {
         //Failed to Disable K3 Internal Amp
-        //Continue On anyway
+        //Change to Error Mode
+        ErrorString = "K3 Internal Amp";
+        Mode = ModeError;
+        return;
         break;
       }
     case 3: {
         //Failed Power Up 50v Test
-        //Change back to Off Mode  (but we didn't call OffRoutine, so the display stays with the message.)
-        Mode = ModeOff;
+        ErrorString ="50 Volt Fail";
+        Mode = ModeError;
         return;
         break;
       }
@@ -85,6 +75,9 @@ void SubPowerTurnedOn(int &CurrentBand, byte &RigPortNumber, byte &RigModel, byt
   //Do I want to try to get the AI2 working???
   //Set Rig to Mode "AI2" to indicate Freq & Power Changes:
   //if (SetRigAi2Mode(RigPortNumber))
+
+  //When Time Expires, will change to OFF mode.
+  TimeUpdate(bHours, bMinutes, ulTimeout, Mode, RigPortNumber);
 }
 
 
@@ -92,6 +85,7 @@ void SubSwrError(bool &SwrFailMessage, bool &Act_Byp) {
   // SWR Error was detected at the top of the Main Loop.
   //The only thing to clear this is to cycle Power (Done in SubSwrErrorReset).
 
+  //I don't think this 'if' is really necessary, nor is the SwrFailMessage!!!
   if (!(SwrFailMessage)) {
     //Indicate the error.  This should beep pretty much continously, each time through the loop.
     // ERR
@@ -115,7 +109,7 @@ void SubSwrErrorReset(int &CurrentBand, byte &Mode, bool &Act_Byp, byte &RigPort
 
   //We turn off the Amp, but we don't actually execute the ModeOff,
   //  so we won't turn off the Rig, because we don't leave this routine.
-  OffRoutine(Mode);
+  OffRoutine(Mode, 0);
 
   //Make sure we are in Bypass mode.
   Act_Byp = 0;
@@ -138,18 +132,20 @@ void SubSwrErrorReset(int &CurrentBand, byte &Mode, bool &Act_Byp, byte &RigPort
   Mode = ModeReceive;  //?? Is there something else that should change the Mode to Receive?????
 }
 
-void SubReceive(int CurrentBand, bool &Act_Byp, bool &FirstTransmit) {
-  //Read Internal Temp, even in the Off Mode:
-  //        int InternalTemp = ReadInternalTemp();
-  //        if (InternalTemp > 120) {
-  //          //Alarm???
+void SubError() {
+  Bypass(0);  //Keep forcing Bypass mode.
+  //Keep repeating an 'e' just as a warning!
+  SendMorse("e");
+}
 
+void SubReceive(int CurrentBand, bool &Act_Byp, bool &FirstTransmit) {
   //If the band is invalid, Set to Bypass
   if (CurrentBand > i6m) {
-    //INVALID Band, set amp to Bypass Mode
+    //INVALID Band, set amp to Bypass Mode (By having this here, we KEEP it in Bypass mode)
     Act_Byp = 0;
     Bypass(Act_Byp);
   }
+  //Set to True so our first Transmit see's it as True.
   FirstTransmit = true;
 }
 
@@ -162,17 +158,7 @@ void SubTransmit(int &FwdPower, int &RefPower, bool &FirstTransmit, float &Swr, 
   FirstTransmit = false;
 
   Swr = CalculateSwr(FwdPower, RefPower);
-  //double AmpTemp = ReadAmpTemp();  //Read the amplifier temp.
+
   //Reset the start time so we are SURE that we don't change bands.
   ulCommTime = millis();  //Serial.println(F("Hit ulCommWait in ModeTransmit."));
 }
-
-//void SubOverTemp(byte OverTemp, byte &Mode) {
-//  //OverTemp was detected in the top of the Loop.
-//  //  Only thing to do is to wait for Overtemp to clear.  It will clear when the Heat Sink cools down.
-//  if (OverTemp == 1) Mode = ModeReceive;
-//}
-
-//void SubSetupBandPower() {
-//  //User is in Setup Mode: Changing the Per Band Power Output.
-//}

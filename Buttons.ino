@@ -57,7 +57,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             break;
           }
         case ModeSetupBandPower: {
-            //Before entering next mode (ModeSetupPwrTimeout),
+            //Before entering next mode (ModeSetupTimeout),
             //  Write the new value to Eeprom (if it changed):
             if (PowerSetting != StartSetting) {
 
@@ -76,13 +76,13 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
               }
             }
 
-            //Need to initialize the Hours for the ModeSetupPwrTimeout mode.
+            //Need to initialize the Hours for the ModeSetupTimeout mode.
             Hours = EEPROMReadInt(iHoursEeprom);
-            Mode = ModeSetupPwrTimeout;
+            Mode = ModeSetupTimeout;
             break;
           }
-        case ModeSetupPwrTimeout: {
-            //Select Key, we are in ModeSetupPwrTimeout, change to ModeSetupBypOperMode.
+        case ModeSetupTimeout: {
+            //Select Key, we are in ModeSetupTimeout, change to ModeSetupBypOper.
             //Before changing Modes, write new Hours:
             if (Hours != StartSetting) {
               //Must write the Hours value when changed (rather than here) because the Display uses the Eeprom value to display the changes.
@@ -97,14 +97,14 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             EepromBypMode = StartSetting;
 
             //Change to the next Setup Mode:
-            Mode = ModeSetupBypOperMode;
+            Mode = ModeSetupBypOper;
             break;
           }
 
-        case ModeSetupBypOperMode: {
+        case ModeSetupBypOper: {
             //Must write the Opr/Byp value when changed (rather than here) because the Display uses the Eeprom value to display the changes.
 
-            //Select Key, we are in ModeSetupBypOperMode, change back to ModeReceive.
+            //Select Key, we are in ModeSetupBypOper, change back to ModeReceive.
             Mode = ModeReceive;
             break;
           }
@@ -136,7 +136,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             PowerSetting = BumpPowerSetting(Increment, CurrentBand);//Write the vale that was changed to Eeprom
             break;
           }
-        case ModeSetupPwrTimeout: {
+        case ModeSetupTimeout: {
             //Adjust Timeout Hours Up if less than 9  (Don't Let Hours go greater than 9, messes up!)
             if (Hours < 9) Hours += 1;  //Adjust Hours Up
             //else { //Already at Max: }
@@ -144,7 +144,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             EEPROMWriteInt(iHoursEeprom, Hours);
             break;
           }
-        case ModeSetupBypOperMode: {
+        case ModeSetupBypOper: {
             //Setup Mode, change from Bypass to Operate:
             EepromBypMode = 1;
             //Write the new value to Eeprom so the Display Updates too!
@@ -170,7 +170,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             PowerSetting = BumpPowerSetting(Decrement, CurrentBand);
             break;
           }
-        case ModeSetupPwrTimeout: {
+        case ModeSetupTimeout: {
             //Don't Let Hours go less than 1
             if (Hours > 1) Hours -= 1; //Adjust Hours Down
             //else { //Already at Min: }
@@ -178,7 +178,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             EEPROMWriteInt(iHoursEeprom, Hours);
             break;
           }
-        case ModeSetupBypOperMode: {
+        case ModeSetupBypOper: {
             EepromBypMode = 0;
             //Write the new value to Eeprom so the Display Updates too!
             EEPROMWriteInt(iBypassModeEeprom, EepromBypMode);
@@ -240,10 +240,12 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
   while (buttons != 0) {
     buttons = lcd.readButtons();
 
+    //Loop here until the button is released.  We can detect if the User wants to turn the system off.
     if (bWriteComplete == false) {
       if ((millis() - StartTime > 2000) && (buttons & BUTTON_SELECT)) {
         //2 Second SELECT button turns the unit OFF.
-        OffRoutine(Mode);
+        if (Mode == ModeError) OffRoutine(Mode, 1); //Turn Off the display
+        else OffRoutine(Mode, 0);  //Don't turn off the display yet.
         bWriteComplete = true;
       }
     }

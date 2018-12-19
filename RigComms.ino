@@ -67,37 +67,45 @@ bool K3AmpOnOff(byte RigPortNumber, bool OnOff) {
   //Turn the KPA3 K3 Amp Off to assure that we don't overdrive the LDMOS Amplifier:
   //  Return "true" for Failed, or "false" for Passed.
   String Response;
-  bool Result;
+  bool Result = true;
+  byte count = 5;
 
-  if (OnOff == 0) {
-    //Set K3 Internal Amp to Bypass:
-    Response = RadioCommandResponse("MN055;MP007;", RigPortNumber);
-  }
-  else {
-    //Re-Enable the K3 Internal Amp.
-    Response = RadioCommandResponse("MN055;MP008;", RigPortNumber);
-  }
+  do {
+    if (OnOff == 0) {
+      //Set K3 Internal Amp to Bypass:
+      Response = RadioCommandResponse("MN055;MP007;", RigPortNumber);
+    }
+    else {
+      //Re-Enable the K3 Internal Amp.
+      Response = RadioCommandResponse("MN055;MP008;", RigPortNumber);
+    }
 
-  //Allow time for response from the K3 Rig:
-  delay(50);
+    //Allow time for response from the K3 Rig:
+    delay(50);
 
-  //Verify:
-  //Send the MP; command, expect response "7" for K3 Amp Bypass mode, or "8" for K3 Amp Enabled.
-  Response = RadioCommandResponse("MP;", RigPortNumber);
-  if (OnOff == 0) {
-    if (Response.indexOf("7") == -1) Result = true; //Failed
-    else Result = false; //Passed OK
-  }
-  else {
-    if (Response.indexOf("8") == -1) Result = true; //Failed
-    else Result = false; //Passed OK
-  }
+    //Verify:
+    //Send the MP; command, expect response "7" for K3 Amp Bypass mode, or "8" for K3 Amp Enabled.
+    Response = RadioCommandResponse("MP;", RigPortNumber);
+    if (OnOff == 0) {
+      if (Response.indexOf("7") == -1) Result = true; //Failed
+      else Result = false; //Passed OK
+    }
+    else {
+      if (Response.indexOf("8") == -1) Result = true; //Failed
+      else Result = false; //Passed OK
+    }
+
+    count -= 1;
+    //Retry 5 times:
+  } while ((Result == true) && (count > 0));
 
   //Take the rig back out of the Menu mode:
   Response = RadioCommandResponse("MN255;", RigPortNumber);
+
   //Return the result:
   return Result;
 }
+
 
 unsigned int ReadTheFrequency(byte RigPortNumber) {
   String Frequency = RadioCommandResponse("FA;", RigPortNumber);
@@ -119,6 +127,7 @@ unsigned int ReadTheFrequency(byte RigPortNumber) {
 //  return BandNumber;
 //}
 
+//Currently Not Used...
 unsigned int ReadThePower(byte RigPortNumber) {
   String Power = RadioCommandResponse("PC;", RigPortNumber);
 
@@ -131,32 +140,43 @@ unsigned int ReadThePower(byte RigPortNumber) {
 bool SetTunePower(byte TuneValue, byte RigPortNumber) {
   //Returns true on failure
   //Set Menu Command for Tune Power
-  String Menu = RadioCommandResponse("MN058;", RigPortNumber);
-  //Serial.print(F("  Menu Command Read as: ")); Serial.println(Menu);
-  delay(50);
-  //Limit TuneValue to 10 watts.
-  if (TuneValue > 10) TuneValue = 10;
-  //TuneValue is in the form of: 5 watts = "mp050;", 10 watts = "mp100;"
-  TuneValue = TuneValue * 10;
+  int PwrSetting = TuneValue * 10;
+  byte count = 5;
 
-  //TuneValue written must be 3 characters:
-  if (TuneValue < 100) {
-    String PowerResponse = RadioCommandResponse(("Mp0" + String(TuneValue) + ";"), RigPortNumber);
-  }
-  else {
-    String Power = RadioCommandResponse(("Mp" + String(TuneValue) + ";"), RigPortNumber);
-  }
-  String Power = RadioCommandResponse("Mp;", RigPortNumber);
-  //Serial.print(F("  Menu Command Verified as: ")); Serial.println(Power);
+  do {
+    String Menu = RadioCommandResponse("MN058;", RigPortNumber);
+    //Serial.print(F("  Menu Command Read as: ")); Serial.println(Menu);
+    delay(50);
+    //Limit TuneValue to 10 watts.
+    if (TuneValue > 10) TuneValue = 10;
+    //TuneValue is in the form of: 5 watts = "mp050;", 10 watts = "mp100;"
+    TuneValue = TuneValue * 10;
 
-  delay(10);
-  //Exit the Menu mode:
-  RadioCommandResponse("MN255;", RigPortNumber);
+    //TuneValue written must be 3 characters:
+    if (TuneValue < 100) {
+      String PowerResponse = RadioCommandResponse(("Mp0" + String(TuneValue) + ";"), RigPortNumber);
+    }
+    else {
+      String Power = RadioCommandResponse(("Mp" + String(TuneValue) + ";"), RigPortNumber);
+    }
+    String Power = RadioCommandResponse("Mp;", RigPortNumber);
+    //Serial.print(F("  Menu Command Verified as: ")); Serial.println(Power);
 
-  //Get the Power setting from the return string:
-  int PwrSetting = Power.substring(2, 4).toInt();
-  if (TuneValue != (PwrSetting * 10)) {
-    return true;
+    delay(10);
+    //Exit the Menu mode:
+    RadioCommandResponse("MN255;", RigPortNumber);
+
+    //Serial.print(F("Power value Returned = ")); Serial.println(Power);
+    //Get the Power setting from the return string:
+    PwrSetting = Power.substring(2, 5).toInt();
+    //Serial.print(F("PwrSetting = ")); Serial.println(PwrSetting);
+    count -=1; //Decrement the count.
+    
+  } while  ((TuneValue != PwrSetting) && (count > 0));
+
+  //Serial.print(F("Attempting to set Tune to: ")); Serial.print(TuneValue); Serial.print(F(" Actual: ")); Serial.println(PwrSetting);
+  if (TuneValue != PwrSetting) {
+    return true; //Failed
   }
   else return false;
 }

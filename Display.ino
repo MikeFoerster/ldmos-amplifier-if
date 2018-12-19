@@ -31,9 +31,10 @@
 // Wait for Clear  (Must wait for the temp to drop to below error value)
 
 
-void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, float Volts, bool Act_Byp, double AmpTemp, byte bHours, byte bMinutes) {
+void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, float Volts, bool Act_Byp, double AmpTemp, byte bHours, byte bMinutes, String ErrorString) {
   String Line1 = "";
   String Line2 = "";
+  //unsigned long LoopTime = millis();
 
   if (Mode >= ModeSwrError) {
     //For Modes other than Off & PowerUp, Get the BandString to start Line1.
@@ -58,30 +59,26 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
         break;
       }
 
+    case ModeError: {
+        Line1 = Line1 + "Error Mode ";
+        Line2 = ErrorString;
+        break;
+      }
+
     case ModeReceive: {
         Line1 = Line1 + "Receive";
         //If the Amp is in Bypass, indicate by adding the "Byp" to the end of the string.
         if (Act_Byp == false) {
           Line1 = Line1 + " Byp";
         }
-
-        //Start Line 2
-        //Check for Low Voltage:
-        if (Volts < 30) {
-          //Error only after the 5th time, otherwise may get false errors on startup.
-          Line2 = String(Volts) +  "v  LOW VOLTS!";
-          //Keep repeating an 'e' just as a warning!
-          SendMorse("e");
+        
+        //Line 2, Build the normal Recieve String:  Volts, AmpTemp, TimeRemaining...
+        Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+        if (bMinutes < 10) {   //char(223) is the Degree symbol.
+          Line2 += ":0" + String(int(bMinutes));
         }
-        //Volts OK, build the normal Recieve String:  Volts, AmpTemp, TimeRemaining...
         else {
-          Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
-          if (bMinutes < 10) {   //char(223) is the Degree symbol.
-            Line2 += ":0" + String(int(bMinutes));
-          }
-          else {
-            Line2 += ":" + String(int(bMinutes));
-          }
+          Line2 += ":" + String(int(bMinutes));
         }
         break;
       }
@@ -114,13 +111,13 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
         break;
       }
 
-    case ModeSetupPwrTimeout: {
+    case ModeSetupTimeout: {
         Line1 = Line1 + "Timeout";
         Line2 = String(EEPROMReadInt(iHoursEeprom)) + " Hours";
         break;
       }
 
-    case ModeSetupBypOperMode: {
+    case ModeSetupBypOper: {
         Line1 = Line1 + "Byp/Op Mode";
         //Not sure if this is correct!
         if ((EEPROMReadInt(iBypassModeEeprom)) == 0)  Line2 = "Chng Mode=Bypass";
@@ -129,6 +126,8 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
       }
       //default:
   }  //End of switch(Mode)
+
+  //  Serial.print(F("Before: ")); Serial.println(millis() - LoopTime);
 
   //Print out the display lines:
   // NOTE: Each line print takes ~95ms!
@@ -139,11 +138,14 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
       Line1 += " ";
     }
     lcd.print(Line1);
+    //    Serial.print(F("Line 1: ")); Serial.println(millis() - LoopTime);
 
     lcd.setCursor(0, 1);
     while (Line2.length() < 16) {
       Line2 += " ";
     }
     lcd.print(Line2);
+    //    Serial.print(F("Line 2: ")); Serial.println(millis() - LoopTime);
   }
+  //  Serial.print(F("After: ")); Serial.println(millis() - LoopTime);
 }
