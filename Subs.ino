@@ -77,7 +77,7 @@ void SubPowerTurnedOn(int &CurrentBand, byte &RigPortNumber, byte &RigModel, byt
   //if (SetRigAi2Mode(RigPortNumber))
 
   //When Time Expires, will change to OFF mode.
-  TimeUpdate(bHours, bMinutes, ulTimeout, Mode, RigPortNumber);
+  TimeUpdate(bHours, bMinutes, ulTimeout, Mode);
 }
 
 
