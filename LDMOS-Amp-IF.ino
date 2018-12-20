@@ -268,6 +268,9 @@ void loop() {
     //  Volts - Check for over/under voltage
     StatusChecks(OverTemp, SwrFail, TransmitIndication, Volts, AmpTemp, Mode, ErrorString);
 
+    //Update the clock
+    TimeUpdate(bHours, bMinutes, ulTimeout, Mode);
+
     //Check the Band every few seconds...
     if ((millis() - ulCommTime) > 2000) {
       //Check and update the Band.
@@ -331,7 +334,6 @@ void loop() {
     case ModeError: {
         SubError();
         //Consider turning off AC Power for Voltage Fail, High or Low.
-        //How do we EXIT ModeError???
       }
     case ModeReceive: {
         SubReceive(CurrentBand, Act_Byp, FirstTransmit);
