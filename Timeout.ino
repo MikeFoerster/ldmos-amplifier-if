@@ -6,7 +6,7 @@ void CalculateTimeout(byte bHours, byte bMinutes, unsigned long &ulTimeout) {
 
 
 //Update the Hours and Minutes (Used each Loop) and call Beeper if less than 10 minutes.
-void TimeUpdate(byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte &Mode, byte RigPortNumber) {
+void TimeUpdate(byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte &Mode) {
   //We should NOT get here if Mode == OFFMODE:
   unsigned long Seconds = ulTimeout - (millis() / 1000);
 
@@ -44,4 +44,3 @@ void TimeoutBeeper(byte bMinutes, byte Mode) {
     }
   }
 }
-
