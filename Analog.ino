@@ -1,5 +1,5 @@
 
-void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float &Volts, double &AmpTemp, byte &Mode, String ErrorString) {
+void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float &Volts, double &AmpTemp, byte &Mode, String &ErrorString) {
   //Check for Mode Changes & update TransmitLED and Voltmeter...
 
   //OverTemp
@@ -91,7 +91,7 @@ float ReadVoltage() {
   //Take the Voltage Reading:
   int Counts = analogRead(A0);
 
-  //Minimize the Display bobble:
+  //Minimize the Display bobble by only updating if it changes by more than 3 digits:
   if (abs(Counts - LastCounts) > 3) {
     LastCounts = Counts;
     return (float(Counts) / 16.94);
@@ -128,17 +128,17 @@ void SetFanSpeed(double InternalTemp) {
   // analogWrite(Pin, [0 to 255])
   if (InternalTemp >= 105) {
     analogWrite(iFanPwmPin, 255); //Fast
-    Serial.println(F("Set Fan to 255"));
+    //Serial.println(F("Set Fan to 255"));
     SendMorse("Fan 1 ");
   }
   else if (InternalTemp >= 100) {
     analogWrite(iFanPwmPin, 200); //Medium
-    Serial.println(F("Set Fan to 200"));
+    //Serial.println(F("Set Fan to 200"));
     SendMorse("Fan 2 ");
   }
   else if (InternalTemp >= 95) {
     analogWrite(iFanPwmPin, 150);  //Slow
-    Serial.println(F("Set Fan to 150"));
+    //Serial.println(F("Set Fan to 150"));
     SendMorse("Fan3 ");
     //Does the fan ever come on?  Keep track of it for a while:
     int FanCounter = EEPROMReadInt(iFanCount);
@@ -188,4 +188,3 @@ void Bypass(bool State) {
   if (State == false) digitalWrite(ActBypSwitchPin, OFF);
   else digitalWrite(ActBypSwitchPin, ON);
 }
-
