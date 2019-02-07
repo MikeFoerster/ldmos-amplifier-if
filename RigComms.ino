@@ -7,14 +7,6 @@ String RadioCommandResponse(String InputCommand, byte PortNumber) {
   char character;
   String Response = "";
 
-  //Serial.print(F("1  Port = ")); Serial.println(PortNumber);
-  //Serial.print(F("2  Sending = ")); Serial.println(InputCommand);
-
-  //  static unsigned long ExecuteTime;
-  //  Serial.print(F("  Rig Cmd: ")); Serial.print(InputCommand);
-  //  Serial.print(F("  Time from last Command = ")); Serial.println(millis() - ExecuteTime);
-  //  ExecuteTime = millis();
-
   if (PortNumber == 1) {
     Serial1.print(InputCommand);
     //Serial1.flush();  //wait for the command to go out before trying to read
@@ -25,7 +17,6 @@ String RadioCommandResponse(String InputCommand, byte PortNumber) {
       character = Serial1.read();
       Response.concat(character);
       delay(5);  //changed from 5 to 10
-      //Serial.print(Response);
     }
     return Response;
   }
@@ -38,7 +29,6 @@ String RadioCommandResponse(String InputCommand, byte PortNumber) {
       Response.concat(character);
       delay(5);
     }
-    //Serial.print(F("4  RadioCommandResponse = ")); Serial.println(Response);
     return Response;
   }
 }
@@ -46,19 +36,14 @@ String RadioCommandResponse(String InputCommand, byte PortNumber) {
 byte GetRigModel(byte RigPortNumber) {
 
   String Model = RadioCommandResponse("OM;", RigPortNumber);
-  //Serial.print(F("  Model Read as: ")); Serial.println(Model);
   if (Model.indexOf("X") > -1) {
     int Xval = Model.indexOf("X");
-    //Serial.print(F("X position = ")); Serial.println(Xval);
-    //Serial.println(F("Identified Model as K3 with KXV3 Transverter Module"));
     return 1;
   }
   else if (Model.indexOf("B") > -1) {
-    //Serial.println(F("Identified Model as KX3 with KXBC3 Battery Module"));
     return 2;
   }
   else {
-    //Serial.println(F("Model Not Identified"));
     return 0;
   }
 }
@@ -108,12 +93,20 @@ bool K3AmpOnOff(byte RigPortNumber, bool OnOff) {
 
 
 unsigned int ReadTheFrequency(byte RigPortNumber) {
-  String Frequency = RadioCommandResponse("FA;", RigPortNumber);
-  //Serial.print(F("  RawFrequency Read as: ")); Serial.println(Frequency);
+  //Returns Frequency.
+  String Frequency = "";
+
+  //5 Retries:
+  byte count = 5;
+  do {
+    Frequency = RadioCommandResponse("FA;", RigPortNumber);
+    count -= 1;
+    delay(25);
+  } while ((Frequency == "") && (count > 0));
+
   if (Frequency == "") return 255;
   //Convert the Power to an Integer:
   unsigned int iFreq = Frequency.substring(5, 10).toInt();
-  //Serial.print(F("  iFreq Read as: ")); Serial.println(iFreq);
   return iFreq;
 }
 
@@ -131,7 +124,6 @@ unsigned int ReadTheFrequency(byte RigPortNumber) {
 unsigned int ReadThePower(byte RigPortNumber) {
   String Power = RadioCommandResponse("PC;", RigPortNumber);
 
-  //Serial.print(F("  String Power Read as: ")); Serial.println(Power);
   //Convert the Power Reading to an Integer:
   unsigned int iPower = Power.substring(3, 5).toInt();
   return iPower;
@@ -145,7 +137,6 @@ bool SetTunePower(byte TuneValue, byte RigPortNumber) {
 
   do {
     String Menu = RadioCommandResponse("MN058;", RigPortNumber);
-    //Serial.print(F("  Menu Command Read as: ")); Serial.println(Menu);
     delay(50);
     //Limit TuneValue to 10 watts.
     if (TuneValue > 10) TuneValue = 10;
@@ -159,154 +150,62 @@ bool SetTunePower(byte TuneValue, byte RigPortNumber) {
     else {
       String Power = RadioCommandResponse(("Mp" + String(TuneValue) + ";"), RigPortNumber);
     }
+    delay(25);
     String Power = RadioCommandResponse("Mp;", RigPortNumber);
-    //Serial.print(F("  Menu Command Verified as: ")); Serial.println(Power);
 
-    delay(10);
+    delay(25);
     //Exit the Menu mode:
     RadioCommandResponse("MN255;", RigPortNumber);
 
-    //Serial.print(F("Power value Returned = ")); Serial.println(Power);
     //Get the Power setting from the return string:
     PwrSetting = Power.substring(2, 5).toInt();
-    //Serial.print(F("PwrSetting = ")); Serial.println(PwrSetting);
-    count -=1; //Decrement the count.
-    
+    count -= 1; //Decrement the count.
+
   } while  ((TuneValue != PwrSetting) && (count > 0));
 
-  //Serial.print(F("Attempting to set Tune to: ")); Serial.print(TuneValue); Serial.print(F(" Actual: ")); Serial.println(PwrSetting);
+
   if (TuneValue != PwrSetting) {
     return true; //Failed
   }
   else return false;
 }
 
-bool SetThePower(byte PowerValue, byte RigPortNumber) {
+bool SetPower(byte PowerValue, byte RigPortNumber) {
   //Returns true on failure.
   String CommandResponse;
-  //Serial.print(F("  Setting Power to: ")); Serial.println(PowerValue);
+  byte count = 5;
+  String Command;
+  int PowerResponse;
 
   if (PowerValue < 10) {
-    RadioCommandResponse("PC00" + String(PowerValue), RigPortNumber);
+    Command = "PC00" + String(PowerValue) + ";";
   }
   else if (PowerValue >= 10) {
-    RadioCommandResponse("PC0" + String(PowerValue), RigPortNumber);
+    Command = "PC0" + String(PowerValue) + ";";
   }
 
-  delay(50);
-  CommandResponse = RadioCommandResponse("PC;", RigPortNumber);
-  if (CommandResponse == "") {
-    //I have no idea what happened!!! This used to work, but now, it takes a second try!!!
-    delay(50);
-    //Serial.println(F("Second Try:"));
+  do {
+    RadioCommandResponse(Command, RigPortNumber);
+    delay (50);
+
     CommandResponse = RadioCommandResponse("PC;", RigPortNumber);
-  }
-  //Serial.print(F("  CommandResponse : ")); Serial.println(CommandResponse);
-  int iPowerResponse = CommandResponse.substring(2, 14).toInt();
-  //Serial.print(F("  Power Set To: ")); Serial.println(CommandResponse);
-  //Serial.print(F("  Power VALUE Set To: ")); Serial.println(iPowerResponse);
-  if (iPowerResponse != PowerValue) {
-    //Command Failed, NOW WHAT???)
-    //   Retry and Beep???
+    PowerResponse = CommandResponse.substring(2, 14).toInt();
+
+    count -= 1;
+  } while ((PowerResponse != PowerValue) && (count > 0));
+
+  if (PowerResponse != PowerValue) {
+    //Command Failed to set the correct value
     return true;
   }
   return false;
 }
 
 void RigPowerOff(byte RigPortNumber) {
-  //Returns true on failure
-  //Turn Off Rig and Close Comm Ports
-  String Response = RadioCommandResponse("PS0;", RigPortNumber);
-  if (Response == "") {
-    //Just in case the command fails, Try again...
-    delay(100);
-    Response = RadioCommandResponse("PS0;", RigPortNumber);
-  }
-  //Serial.print(F("Power Off returned: ")); Serial.println(Response);
-  //WARNING: Do NOT use Serial[1 0r 2].End  It affects the P3 so that it becomes nearly un-responsive!
-  Serial1.end();
-  Serial2.end();
+  //Turn Off Rig by sending "PS0" command (No response expected)
+  RadioCommandResponse("PS0;", RigPortNumber);
+  
+  //Just in case the command fails, Try again...
+  delay(100);
+  RadioCommandResponse("PS0;", RigPortNumber);
 }
-
-
-/*
-   NOT USING AI2 mode.  Experiment with it later...
-     It worked at first, then seemed to quit.  ANY comms with the rig can grab the Freq Change stuff and it's lost.
-  //Set AI2 Mode
-  bool SetRigAi2Mode(byte RigPortNumber) {
-  String RigMode = RadioCommandResponse("AI2;", RigPortNumber);
-  //Serial.print(F("  AI2 Read as: ")); Serial.println(RigMode);
-  delay(50);
-  RigMode = RadioCommandResponse("AI;", RigPortNumber);
-  if (RigMode.indexOf("AI2") == -1) {
-    Serial.print(F("AI2 Command not Read as 'AI2'"));
-    Serial.print(F("  AI2 Read as: ")); Serial.println(RigMode);
-    //AI2 Mode not set,
-    Serial.println(F("       Set to BYPASS MODE since we can't verify AI2 mode."));
-    return true;
-  }
-  else {
-    Serial.println(F(" Set AI2 Mode."));
-    return false;
-  }
-  }
-
-  bool VerifyRigAI2Set(byte RigPortNumber) {
-  String RigMode = RadioCommandResponse("AI;", RigPortNumber);
-  Serial.print(F("  AI2 Read as: ")); Serial.println(RigMode);
-  if (RigMode.indexOf("AI2") == -1) {
-    Serial.print(F("AI2 Command not Verified as 'AI2'"));
-    Serial.print(F("  AI2 Read as: ")); Serial.println(RigMode);
-    //AI2 Mode not set,
-    Serial.println(F("       Set to BYPASS MODE since we can't verify AI2 mode."));
-    return true;
-  }
-  else {
-    Serial.println(F(" Verified AI2 Mode."));
-    return false;
-  }
-  }
-
-  bool CheckRigAI2Mode(byte RigPortNumber, int &CurrentBand, int &PowerSetting) {
-  char character;
-  String Response = "";
-  String Frequency = "";
-  //Serial.println(F("CheckRigAI2Mode..."));
-  while (Serial1.available())  {
-    character = Serial1.read();
-    Response.concat(character);
-    delay(5);  //changed from 5 to 10
-    Serial.print(Response);
-  }
-
-  if (Response.length() > 0) {
-    Serial.print(F("  RadioCommandResponse = ")); Serial.println(Response);
-    //Serial.print(F("  String Length is = ")); Serial.println(Response.length());
-    //We only need the LAST Frequency
-
-    int FrequencyIndex = Response.indexOf("FA");
-  Serial.print(F("  Index is = ")); Serial.println(FrequencyIndex);
-    if (FrequencyIndex > -1) {
-      //Valid Frequency detected in the respone:
-      int ColonIndex = Response.indexOf(";", FrequencyIndex);
-      Frequency = Response.substring(FrequencyIndex, ColonIndex);
-      Serial.print(F("  Frequency Read As = ")); Serial.println(Frequency);
-      unsigned int iFreq = Frequency.substring(5, 10).toInt();
-      Serial.print(F("  Frequency Int Value Read As = ")); Serial.println(iFreq);
-      byte ThisBand = FreqToBand(iFreq);
-
-      Serial.print(F("  Band Value Read As = ")); Serial.println(ThisBand);
-      if (ThisBand != CurrentBand) {
-        CurrentBand = ThisBand;
-        SetupBandOutput(CurrentBand);
-
-        Serial.println(F("Calling UpdateBandPower!"));
-        //Set the Power for the Rig to the Power Value stored in Eeprom
-        UpdateBandPower(CurrentBand, RigPortNumber);
-      }
-    }
-    return true;
-  }
-  else return false;
-  }
-*/

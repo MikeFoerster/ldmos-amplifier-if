@@ -1,23 +1,22 @@
 // From: https://gist.github.com/baojie/4460468 and modified from there (added 'switch' statement).
 
-void SendMorse(String CharsToSend, bool Repeat=0) {
-  //bool Repeat is an optional arg, when not specified, defaults to 0.
+void SendMorse(String CharsToSend) {
   static String Stored;
-
   
-  if (Repeat) {
-    //Optional Repeat arg, repeat last message:
+  if (CharsToSend == "") {
+    //When string is blank, Repeat last message:
     CharsToSend = Stored;
   }
-  else { Stored = CharsToSend; }  //Store this message
-  
+  else {
+    Stored = CharsToSend;  //Store this message
+   }
+    
   //Change all characters to Lower Case;
   CharsToSend.toLowerCase();
   int c = CharsToSend.length();
 
   //Loop through and send each character.
   for (int i = 0; i < c; i++) {
-    //Serial.print(F(" Sending Char: ")); Serial.println(CharsToSend[i]);
     morse(CharsToSend[i]);
   }
 }
@@ -83,4 +82,3 @@ switch (letter) {
   // Add an End of Character delay:
   delay(2 * tempo);      // this makes 3 * tempo for letter end, and 7 * tempo for space
 }
-

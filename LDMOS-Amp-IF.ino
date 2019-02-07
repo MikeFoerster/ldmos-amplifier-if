@@ -30,7 +30,7 @@
      5. System will support a communications output port that will simulate some of the KPA500 functions for remote operation.
 
     Questions:
-      1. Should I add the capabilty to automatically change the antenna for the KX3, similar to the K3?
+      1. Should I add the capabilty to automatically change the antenna switch for the KX3, similar to the K3?
 
     Button Operation:
      Select
@@ -59,7 +59,7 @@
      NEED to Verify All Specifications.
 */
 
-#define  VERSION_ID  F("LDMOS 8-2018 2.0" )
+#define  VERSION_ID  F("LDMOS 8-2018 3.0" )
 
 #define DEBUG
 #include <EEPROM.h>
@@ -85,7 +85,7 @@ const int i10m = 14;
 const int i6m = 16;
 const int i60m = 30;
 const int i30m = 32;
-
+//Other Eeprom addreses:
 const int iHoursEeprom = 34; //Eeprom storage for the Timeout time Hours.
 const int iBypassModeEeprom = 36;
 const int iFanCount = 38;
@@ -135,15 +135,12 @@ const byte ModeSetupBypOper = 11;  //Select if on Power Up if we start in Bypass
 //Changes the speed of the Morse Code Error Indications.
 int tempo = 75;
 
-// SendMorse is used for Error indications
-//Declared here to allow for an optional "bool Repeat = default" argument (in the MorseCode file).
-void SendMorse(String CharsToSend, bool Repeat = 0);
 
 /*
     ############### Setup Procedure ############################
 */
 void setup() {
-  // Monitor Comm Port Setup
+  // Monitor Comm Port Setup Baud Rate
   Serial.begin(115200);
 
   // set up the LCD's number of columns and rows:
@@ -200,12 +197,7 @@ void setup() {
 
   //Use the OffRoutine to disable everything.
   byte tmpMode = 0; //Var required for OffRoutine
-  OffRoutine(tmpMode, 1);
-
-  //I had trouble initialzing the time, if it's greater than 9, put it back to 3 hours.
-  if (EEPROMReadInt(iHoursEeprom) > 9) {
-    EEPROMWriteInt(iHoursEeprom, 3);
-  }
+  OffRoutine(tmpMode);
 }
 
 
@@ -220,8 +212,6 @@ void loop() {
   float Swr;
   float Volts;
   bool Act_Byp;
-  bool TransmitIndication;
-  bool OverTemp;
   bool SwrFail;
   static byte RigPortNumber;
   static unsigned long TemperatureReadTime;
@@ -232,15 +222,9 @@ void loop() {
   static unsigned long ulTimeout;
   static unsigned long ulCommTime;
   static byte RigModel;  //0 = None, 1 = K3, 2 = KX3
-  static bool FirstTransmit;
+  static bool FirstTransmit;  //Keep track of first transmit cycle so we clear the Fwd/Ref Power on first Transmit.
   static byte Mode;
   static String ErrorString;
-
-  //unsigned long LoopTime = millis();
-
-  //Look Into and Understand SwrFailMessage
-  //  Ok to remove 'static' from AmpTemp?
-  // moved declaration for 'double InternalTemp', removed 'static'
 
   //Used for Startup Only:
   if (Mode == 0) Mode = ModeOff;
@@ -248,13 +232,12 @@ void loop() {
   //Read Internal Temp every 20 seconds and turn on the fan if necessary:
   if ((millis() - TemperatureReadTime) > 20000) {
     double InternalTemp = ReadInternalTemp();
-    //Reset for the next 10 seconds:
+    //Reset for the next 20 seconds:
     TemperatureReadTime = millis();
   }
 
-  //#ifdef DEBUG
-  PrintTheMode(Mode);
-  //#endif
+  //Only used for Debug:
+  //PrintTheMode(Mode);
 
   //Check the buttons:
   HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp);
@@ -264,11 +247,10 @@ void loop() {
     //Status Checks
     //  OverTemp: Change Mode to ModeOverTemp, or back to Receive when it clears.
     //  SwrFail: Change Mode to ModeSwrError (Press Left Button to Power Cycle to clear)
-    //  TransmitIndication: Change Mode to ModeTransmit or ModeReceive
     //  Volts - Check for over/under voltage
-    StatusChecks(OverTemp, SwrFail, TransmitIndication, Volts, AmpTemp, Mode, ErrorString);
+    StatusChecks(SwrFail, Volts, AmpTemp, Mode, ErrorString);
 
-    //Update the clock
+    //Update Time each cycle, When Time Expires, will change to OFF mode.
     TimeUpdate(bHours, bMinutes, ulTimeout, Mode);
 
     //Check the Band every few seconds...
@@ -276,7 +258,7 @@ void loop() {
       //Check and update the Band.
       //if (CheckRigAI2Mode(RigPortNumber, CurrentBand, PowerSetting))
       if (Mode != ModeSetupBandPower) { //Don't Update for ModeSetupBandPower, it can change bands using the Left/Right buttons.
-        if (CheckBandUpdate(CurrentBand, RigPortNumber)) {
+        if (CheckBandUpdate(CurrentBand, RigPortNumber, Mode)) {
           //Band change detected
           //Read the data in Eeprom, should we start in Bypass(0) or Operate(1) mode?
           Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
@@ -293,7 +275,7 @@ void loop() {
   switch (Mode) {
     case ModeOff: {
         //First time thru, Reset Rig Amp and Tune Power to default, Turn off the Rig and clear the variables.
-        //  Check for Errorstring is to see if the previous mode was ModeError.
+        //  Check for ErrorString is to see if the previous mode was ModeError.
         if (RigModel || (ErrorString != "")) {
 
           //If not ModeError, then ask about turning the Rig Off.
@@ -311,10 +293,9 @@ void loop() {
           //Clear the RigModel variable so we no longer write to the K3:
           RigModel = 0;
           ErrorString = "";
-          //WARNING: Do NOT use Serial[1 0r 2].End  It affects the P3 so that it becomes nearly un-responsive!  (???)
         }
-
-        delay(100);
+        
+        delay(100);  //ModeOff main delay...
         break;
       }
     case ModePowerTurnedOn: {
@@ -323,17 +304,17 @@ void loop() {
         break;
       }
     case ModeSwrError: {
-        bool SwrFailMessage;
-        SubSwrError(SwrFailMessage, Act_Byp);
+        SubSwrError(Act_Byp);
         break;
       }
     case ModeSwrErrorReset: {
-        SubSwrErrorReset(CurrentBand, Mode, Act_Byp, RigPortNumber, RigModel);
+        SubSwrErrorReset(Mode);
         break;
       }
     case ModeError: {
         SubError();
         //Consider turning off AC Power for Voltage Fail, High or Low.
+        break;
       }
     case ModeReceive: {
         SubReceive(CurrentBand, Act_Byp, FirstTransmit);
@@ -361,14 +342,11 @@ void loop() {
         //Select if we will Power Up in Bypass or Operate Mode (stored in Eeprom)
         break;
       }
-      //default:
+      //No Default Used
 
   }  //End of switch(Mode)
 
-  //Serial.print(F("ErrorString = ")); Serial.println(ErrorString);
-  //  Serial.print(F("Before Display: ")); Serial.println(millis() - LoopTime);
-  //UpdateDisplay takes ~200ms
+  //UpdateDisplay takes ~200ms (Most is in the Display Update)
   UpdateDisplay(Mode, CurrentBand, FwdPower, RefPower, Swr, Volts, Act_Byp, AmpTemp, bHours, bMinutes, ErrorString);
 
-  //Serial.print(F("Looptime: ")); Serial.println(millis() - LoopTime);
 }  //End of Main Loop()

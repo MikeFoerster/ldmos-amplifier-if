@@ -1,19 +1,3 @@
-
-/*
-   Initial Display Plan:
-     3.5 MHz FWD1200 SWR 1.0
-     50.0V [Ative/Bypass] [XMT/Rcv]
-
-     Errors:
-        OverTemp
-        SWR ERROR (over SWR, need to reboot
-
-     Juma amp is:
-     3.5MHz G3 SWR1.0
-     56.0V 22.0A 45^C
-*/
-
-
 // Update Display Routine
 // |______________|
 //Receive:
@@ -25,7 +9,7 @@
 // |_______________|
 //SWR Error:
 // 160m SWR ERROR
-// Select to Clear (This would cycle power to the amp)
+// Left Key Clear (This would cycle power to the amp)
 //OVER TEMP:
 // 160m OVER TEMP
 // Wait for Clear  (Must wait for the temp to drop to below error value)
@@ -34,7 +18,7 @@
 void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, float Volts, bool Act_Byp, double AmpTemp, byte bHours, byte bMinutes, String ErrorString) {
   String Line1 = "";
   String Line2 = "";
-  //unsigned long LoopTime = millis();
+  static byte count;
 
   if (Mode >= ModeSwrError) {
     //For Modes other than Off & PowerUp, Get the BandString to start Line1.
@@ -55,13 +39,21 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
 
     case ModeSwrError: {
         Line1 = Line1 + "SWR ERROR";
-        Line2 = "Left to Clear";
+        Line2 = "Left Key Clear";
         break;
       }
 
     case ModeError: {
         Line1 = Line1 + "Error Mode ";
+
+        count ++;
+        if (count < 10) {
         Line2 = ErrorString;
+        }
+        else if (count < 20) {
+          Line2 = F("Select to Retry ");
+        }
+        else count = 0; //Reset the count.
         break;
       }
 
@@ -72,9 +64,9 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
           Line1 = Line1 + " Byp";
         }
         
-        //Line 2, Build the normal Recieve String:  Volts, AmpTemp, TimeRemaining...
+        //Line 2, Build the normal Recieve String:  Volts, AmpTemp, TimeRemaining... (char(223) is the Degree symbol)
         Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
-        if (bMinutes < 10) {   //char(223) is the Degree symbol.
+        if (bMinutes < 10) {   
           Line2 += ":0" + String(int(bMinutes));
         }
         else {
@@ -127,8 +119,6 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
       //default:
   }  //End of switch(Mode)
 
-  //  Serial.print(F("Before: ")); Serial.println(millis() - LoopTime);
-
   //Print out the display lines:
   // NOTE: Each line print takes ~95ms!
   if (Mode != ModeOff) {
@@ -138,14 +128,11 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
       Line1 += " ";
     }
     lcd.print(Line1);
-    //    Serial.print(F("Line 1: ")); Serial.println(millis() - LoopTime);
 
     lcd.setCursor(0, 1);
     while (Line2.length() < 16) {
       Line2 += " ";
     }
     lcd.print(Line2);
-    //    Serial.print(F("Line 2: ")); Serial.println(millis() - LoopTime);
   }
-  //  Serial.print(F("After: ")); Serial.println(millis() - LoopTime);
 }

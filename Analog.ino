@@ -1,20 +1,20 @@
 
-void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float &Volts, double &AmpTemp, byte &Mode, String &ErrorString) {
+void StatusChecks(bool &SwrFail, float &Volts, double &AmpTemp, byte &Mode, String &ErrorString) {
   //Check for Mode Changes & update TransmitLED and Voltmeter...
 
   //OverTemp
-  OverTemp = digitalRead(OverTempLedPin);
+  bool OverTemp = digitalRead(OverTempLedPin);
   if ((OverTemp == false) && (Mode != ModeOverTemp)) Mode = ModeOverTemp;  //Have to wait for temp to come down.
   else if ((OverTemp == true) && (Mode == ModeOverTemp)) Mode = ModeReceive;  //Temp has come down.
 
   //Test the SWR Fail input
   if (!(digitalRead(SwrFailLedPin))) {
-    //Serial.println(F("SWR Fail!!!"));
     Mode = ModeSwrError;  //Have to cycle power from Left button press, to recover.
+    SendMorse("Swr Err ");
   }
 
   //Update between Receive and Transmit.
-  TransmitIndication = digitalRead(XmtLedPin);
+  bool TransmitIndication = digitalRead(XmtLedPin);
   if ((TransmitIndication == false) && (Mode == ModeReceive)) Mode = ModeTransmit;
   else if ((TransmitIndication == true) && (Mode == ModeTransmit)) Mode = ModeReceive;
 
@@ -22,12 +22,12 @@ void StatusChecks(bool &OverTemp, bool &SwrFail, bool &TransmitIndication, float
   Volts = ReadVoltage();
   //Check for Low Voltage (Perhaps one supply failed?)
   if (Volts < 37) {
-    //Error only after the 5th time, otherwise may get false errors on startup.
+    //Error
     ErrorString = String(Volts) +  "v  LOW VOLTS!";
     Mode = ModeError;
   }
   else if (Volts > 52) {
-    //Error only after the 5th time, otherwise may get false errors on startup.
+    //Error
     ErrorString = String(Volts) +  "v HIGH VOLTS!";
     Mode = ModeError;
   }
@@ -53,7 +53,6 @@ void ReadPower(int &FwdPower, int &RefPower, bool FirstTransmit) {
 
   FwdPower = analogRead(ForwardInputPin);
   RefPower = analogRead(ReflectedInputPin);
-  //Serial.print(F("Raw Fwd = ")); Serial.print(FwdPower); Serial.print(F("  Raw Ref = ")); Serial.println(RefPower);
   //Store the latest Readings into the array:
   Fwd[Index] = FwdPower * 1.5;
   Ref[Index] = RefPower * 0.7;
@@ -69,9 +68,6 @@ void ReadPower(int &FwdPower, int &RefPower, bool FirstTransmit) {
     if (Fwd[i] > FwdPower) FwdPower = Fwd[i];
     if (Ref[i] > RefPower) RefPower = Ref[i];
   }
-
-  //Serial.print(F("Final Fwd = ")); Serial.print(FwdPower); Serial.print(F("  Final Ref = ")); Serial.println(RefPower);
-  //Serial.print(F("   Index = ")); Serial.println(Index);
 }
 
 float CalculateSwr(float FwdPower, float RefPower) {
@@ -103,10 +99,8 @@ float ReadVoltage() {
 
 double ReadAmpTemp() {
   int counts = analogRead(TempReadout);
-  //Serial.print(F("Amp Temp Counts = ")); Serial.println(counts);
-  //Convert Counts to Temperature (Need to tweek)
+  //Convert Counts to Temperature
   double temp = Thermistor(counts, false);
-  //Serial.print(F("Amp Temp = ")); Serial.println(temp);
   //If the temp shows very high, it's disconnected, show 0!
   if (temp > 200.0) temp = 0;
   return temp;
@@ -114,8 +108,6 @@ double ReadAmpTemp() {
 
 double ReadInternalTemp() {
   int counts = analogRead(TempInternal);
-  //Serial.print(F("Internal Temp Counts: ")); Serial.println(counts);
-
   //Convert Counts to Temperature (Need to tweek)
   double temp = Thermistor(counts, true);   //Runs the fancy math on the raw analog value
   //Turn on the Fan if necessary
@@ -128,18 +120,15 @@ void SetFanSpeed(double InternalTemp) {
   // analogWrite(Pin, [0 to 255])
   if (InternalTemp >= 105) {
     analogWrite(iFanPwmPin, 255); //Fast
-    //Serial.println(F("Set Fan to 255"));
     SendMorse("Fan 1 ");
   }
   else if (InternalTemp >= 100) {
     analogWrite(iFanPwmPin, 200); //Medium
-    //Serial.println(F("Set Fan to 200"));
     SendMorse("Fan 2 ");
   }
   else if (InternalTemp >= 95) {
     analogWrite(iFanPwmPin, 150);  //Slow
-    //Serial.println(F("Set Fan to 150"));
-    SendMorse("Fan3 ");
+    SendMorse("Fan 3 ");
     //Does the fan ever come on?  Keep track of it for a while:
     int FanCounter = EEPROMReadInt(iFanCount);
     EEPROMWriteInt(iFanCount, FanCounter + 1);
@@ -147,13 +136,9 @@ void SetFanSpeed(double InternalTemp) {
   //Allow for 5 degrees of hysteresis.
   else if (InternalTemp < 90) {
     analogWrite(iFanPwmPin, 0);  //Off
-    //Serial.println(F("Set Fan to 0"));
     //SendMorse("Fan Off ");
   }
 }
-
-
-
 
 double Thermistor(int RawADC, bool Internal) {
   // From: https://playground.arduino.cc/ComponentLib/Thermistor2
@@ -165,7 +150,7 @@ double Thermistor(int RawADC, bool Internal) {
   long Resistance;
   double Temp;  // Dual-Purpose variable to save space.
   //Resistance=1000.0*((1024.0/RawADC) - 1);  // Assuming a 10k Thermistor.  Calculation is actually: Resistance = (1024 /ADC -1) * BalanceResistor
-  // For a GND-Thermistor-PullUp--Varef circuit it would be
+  // For a GND-Thermistor-PullUp--Vref circuit it would be
   if (Internal == true) {
     Resistance = 10000 / (1024.0 / ADC - 1);
   }
@@ -178,7 +163,6 @@ double Thermistor(int RawADC, bool Internal) {
   Temp = 1 / (0.001305 + (0.000234125 * Temp) + (0.0000000876741 * Temp * Temp * Temp));   // Now it means both "Temporary" and "Temperature"
   //              ^130 worked close.  Down in value takes temp up.  1.305 seems to hit it!
   Temp = Temp - 273.15;  // Convert Kelvin to Celsius
-  //Serial.print(Temp); Serial.println(" *C");
   Temp = (Temp * 9.0) / 5.0 + 32.0; // Convert to Fahrenheit
   return Temp;  // Return the Temperature
 }

@@ -3,11 +3,7 @@ byte ReadBand(byte RigPortNumber) {
   byte CurrentBand;
 
   //Read the Frequency from the Radio and convert to Band (byte)
-  unsigned int TargetFreq = ReadTheFrequency(RigPortNumber);  //Through RigComms
-  //Serial.print(F("Target Freq: ")); Serial.println(TargetFreq);
-  if (TargetFreq > 0) {
-    CurrentBand = FreqToBand(TargetFreq);
-  }
+  unsigned int TargetFreq = ReadTheFrequency(RigPortNumber);
 
   //TRIED the "BN;" command, but reading the Frequency allows knowing when we are out of the valid Ham Bands
   //  //Read the BAND ("BN;") from the Radio and convert to Band (byte)
@@ -17,9 +13,11 @@ byte ReadBand(byte RigPortNumber) {
   //    CurrentBand = BandNumberToBand(Band);
   //  }
 
+  if (TargetFreq > 0) {
+    CurrentBand = FreqToBand(TargetFreq);
+  }
   else {
     CurrentBand = 255; //Not a valid Frequency!!
-    //Serial.println(F("  Not a Valid Ham Band Frequency   "));
     //Don't SendMorse here, we may be just passing through invalid freq...
   }
   return CurrentBand;
@@ -59,9 +57,9 @@ byte FreqToBand(unsigned int TargetFreq) {
   else return 255;
 }
 
-bool CheckBandUpdate(int &CurrentBand, byte RigPortNumber) {
+bool CheckBandUpdate(int &CurrentBand, byte RigPortNumber, byte &Mode) {
   //Returns true if the band updates.
-  //Usede every so many seconds to see if the band changed.
+  //Used every so many seconds to see if the band changed.
 
   //Store the CurrentBand:
   int LastBand = CurrentBand;
@@ -78,15 +76,13 @@ bool CheckBandUpdate(int &CurrentBand, byte RigPortNumber) {
     delay(100);
     byte CurrentBand2 = ReadBand(RigPortNumber);
     if (CurrentBand == CurrentBand2) {
-
-      //Serial.print(F("CheckBandUpdate Reseting Band to: ")); Serial.println(CurrentBand);
       //Update relays to the new band
       SetupBandOutput(CurrentBand);  //Function just below...
 
-      //Serial.println(F("Calling UpdateBandPower!"));
-      //Set the Power for the Rig to the Power Value stored in Eeprom
+      //Set the Power for the Rig to the Power Value stored in Eeprom for the new band setting.
       if (UpdateBandPower(CurrentBand, RigPortNumber)) {
         //Set for Continous beep for failed UpdateBandPower???
+        Mode = ModeError;
       }
       return true;
     }
@@ -116,17 +112,19 @@ bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
   }
 
   //Set the Power to the Rig using the "PCxxx" command.
-  //Serial.println(F("  Setting PowerValue"));
-  if (SetThePower(PowerValue, RigPortNumber)) {
+  bool Response = SetPower(PowerValue, RigPortNumber);
+  if (Response) {
     //Command Failed...
     SendMorse("Pwr Err");
-    return true;
+    return Response;
   }
-  if (SetTunePower(PowerValue, RigPortNumber)) {
+
+  //Set the Tune Power using the "MPxxx" command.
+  Response =  SetTunePower(PowerValue, RigPortNumber);
+  if (Response) {
     //SetTunePower Failed
-    //Serial.println(F("SetTunePower Failed from Band file."));
     SendMorse("Tune Err");
-    return true;
+    return Response;
   }
 
   //Check the Eeprom setting, set to Operate or Bypass
@@ -155,7 +153,6 @@ void SetupBandOutput(byte CurrentBand) {
     case i12m:  digitalWrite(i10mBandPin, ON); break;
     case i10m:  digitalWrite(i10mBandPin, ON); break;
     case i6m:   digitalWrite(i6mBandPin, ON); break;
-    default: delay(100);
   }
 }
 
@@ -255,7 +252,7 @@ int BumpPowerSetting(byte ReadIncDec, int CurrentBand) {
 }
 
 
-//Return the Maximum Power for the Current Band (Store in Eeprom???):
+//Return the Maximum Power for the Current Band:
 int GetMaxPower(int CurrentBand) {
   //Define a MAXIMUM Power (considering the 6 db attenuator)
   // NOTE that the Attenuator is bypassed in 6m band, we need to do this to get 4 watts out on 6m.

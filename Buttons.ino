@@ -2,10 +2,6 @@
 // Handle the Button Presses
 //
 void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, bool &Act_Byp) {
-  static int LastButton;
-  static long InitialButtonTime;
-  //Initial State needs more thought... FixMe
-  static boolean bAdjustMinutes = true; // Which to adjust, True=Minutes, False=Hours
   boolean bWriteComplete = false;  //Used for Long Key Presses
   static int Hours;
   static int EepromBypMode;
@@ -62,16 +58,13 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             if (PowerSetting != StartSetting) {
 
               //Write the new value to the Rig:
-              //Serial.println(F("  Setting PowerValue"));
-              if (SetThePower(PowerSetting, RigPortNumber)) {
+              if (SetPower(PowerSetting, RigPortNumber)) {
                 //Command Failed...
                 SendMorse("Pwr Err");
-                //Serial.println(F("SetThePower Failed from Buttons file."));
               }
               //Also, set the "Tune" power to the same value
               if (SetTunePower(PowerSetting, RigPortNumber)) {
                 //SetTunePower Failed
-                //Serial.println(F("SetTunePower Failed from Buttons file."));
                 SendMorse("Tune Err");
               }
             }
@@ -106,6 +99,11 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
 
             //Select Key, we are in ModeSetupBypOper, change back to ModeReceive.
             Mode = ModeReceive;
+            break;
+          }
+
+          case ModeError: {
+            Mode = ModePowerTurnedOn;
             break;
           }
       } //End of switch Mode
@@ -211,8 +209,9 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             break;
           }
         default: {
-            //Repeat the last Error from the SendMorse Error message:
-            SendMorse("", true);
+            //Call SendMorse with blank string to Repeat the last Error message:
+            SendMorse("");
+            break;
           }
       }
     }
@@ -244,8 +243,8 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
     if (bWriteComplete == false) {
       if ((millis() - StartTime > 2000) && (buttons & BUTTON_SELECT)) {
         //2 Second SELECT button turns the unit OFF.
-        if (Mode == ModeError) OffRoutine(Mode, 1); //Turn Off the display
-        else OffRoutine(Mode, 0);  //Don't turn off the display yet.
+        if (Mode == ModeError) OffRoutine(Mode);
+        else OffRoutine(Mode); 
         bWriteComplete = true;
       }
     }
@@ -253,6 +252,4 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
 
   //Set switch to tell that the Long Key Presses are Complete.
   bWriteComplete = false;
-
-  return Mode;
 }
