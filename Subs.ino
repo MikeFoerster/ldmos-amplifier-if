@@ -10,7 +10,7 @@ void SubPowerTurnedOn(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber, b
   else AI2Mode = false;
 
   //Attempt to establish communications with the radio (either K3 or KX3)
-  ErrorString = PowerUpRoutine(AI2Mode, CurrentBand, RigPortNumber, RigModel);
+  ErrorString = PowerUpRoutine(AI2Mode, CurrentBand, RigPortNumber, RigModel, Act_Byp);
   if (ErrorString != "") {
     //We have some Error.  Change to ModeError and return.
     Mode = ModeError;
@@ -19,8 +19,15 @@ void SubPowerTurnedOn(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber, b
 
   //Power Up Passed:
   //Change the Mode to normal Receive mode.
-  if (gManualMode) Mode = ModeManual;
-  else            Mode = ModeReceive;
+  if (gManualMode) {
+    Mode = ModeManual;
+    //When starting up, set to ACTIVE mode.  Should stay here unless there is an error...
+    Act_Byp = true;
+    Bypass(Act_Byp);
+  }
+  else {
+    Mode = ModeReceive;
+  }
   //Initialize the Time:
   bHours = EEPROMReadInt(iHoursEeprom);
   bMinutes = 0;
@@ -45,6 +52,8 @@ void SubPowerTurnedOn(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber, b
 
   //When Time Expires, will change to OFF mode.
   TimeUpdate(bHours, bMinutes, ulTimeout, Mode);
+
+  //Serial.print(F("  SubPowerTurnedOn CurrentBand returned: ")); Serial.println(CurrentBand);
 }
 
 void SubPrepareOff(byte &Mode, byte RigPortNumber, byte &RigModel) {
@@ -100,7 +109,7 @@ void SubSwrError(boolean &Act_Byp) {
   //The only thing to clear this is to cycle Power (Done in SubSwrErrorReset).
 
   //Set to Bypass, and keep it that way... (repeat every cycle).
-  Act_Byp = 0;  //Return Act_Byp value of 0!
+  Act_Byp = 0;  //Return Act_Byp value of 0 (Bypass)!
   Bypass(Act_Byp);
 
   // Wait for Power Reset Button (Right) command which will then change Mode to ModeSwrErrorReset,
@@ -133,30 +142,14 @@ void SubError() {
   }
 }
 
-void SubReceive(int &CurrentBand, boolean &Act_Byp, boolean &FirstTransmit, double AmpTemp, byte RigPortNumber) {
-  static byte count;
-  //If the band is invalid, Set to Bypass
-  if (CurrentBand > i6m) {
-    //INVALID Band, set amp to Bypass Mode (By having this here, we KEEP it in Bypass mode)
-    
-    Act_Byp = 0;
-    Bypass(Act_Byp);
-  }
+void SubReceive(boolean &FirstTransmit, double AmpTemp, byte RigPortNumber) {
 
-  //If the comms is disconnected or not working for a period of time, use SendMorse to notify.
-  if (CurrentBand == 255) {
-    //Try re-reading the Band
-    CurrentBand = ReadBand(RigPortNumber, false); 
-    Serial.print(F("  SubRecieve Re-Read CurrentBand as: ")); Serial.println(CurrentBand);
-    //Increment the counter
-    count += 1;
-    //If no Band Update for a while, we must have lost comms, start sending an error.
-    if (count > 25) SendMorse("T ");
+  if (FirstTransmit == false) {
+    if (RigPortNumber == 3) {  //We do this each loop, but that's OK.
+      //Turn OFF Comms Inhibit for Bluetooth:
+      digitalWrite(TxInhibit, 0);
+    }
   }
-  else {
-    if (count) count = 0;
-  }
-
   //Set to True so our first Transmit see's it as True.
   FirstTransmit = true;
 
@@ -164,11 +157,17 @@ void SubReceive(int &CurrentBand, boolean &Act_Byp, boolean &FirstTransmit, doub
   UpdateAmpFan(AmpTemp);
 }
 
-void SubTransmit(int &FwdPower, int &RefPower, boolean &FirstTransmit, float &Swr, unsigned long &ulCommTime) {
+void SubTransmit(int &FwdPower, int &RefPower, boolean &FirstTransmit, float &Swr, unsigned long &ulCommTime, byte RigPortNumber) {
   //Make sure that the Transimit Indication is ON.
   // Update the Display for Fwd, Ref
   ReadPower(FwdPower, RefPower, FirstTransmit, Swr);
 
+  if (FirstTransmit) {
+    if (RigPortNumber == 3) {
+      //Turn on Comms Inhibit for Bluetooth so we don't try to Read the Frequency while in TX:
+      digitalWrite(TxInhibit, 1);
+    }
+  }
   //Clear the 'FirstTransmit' variable, will be reset in Receive mode:
   FirstTransmit = false;
 

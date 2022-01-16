@@ -2,7 +2,7 @@
 //
 // Turn On Routine
 //
-String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
+String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  byte &RigModel, boolean &Act_Byp) {
   //Returns 0 = Passed
   //Returns 1 = Failed to Establish Comms
   //Returns 2 = Failed to Disable K2 Internal Amp
@@ -10,7 +10,6 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
   //Returns 4 = Invalid Band (could be outside the Ham Bands)
   //Returns 5 = SetupAmpBandOutput failed.
   String ErrorString = "";
-
   String RigName = "";
 
   //Initialize the Display:
@@ -27,20 +26,20 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
   lcd.print("Reading Rig Freq");
 
   //Make sure the ports are closed (becomes a problem when reloading code thru IDE)
-  Serial1.flush();
-  Serial2.flush();
-  Serial3.flush();
-  Serial1.end();
-  Serial2.end();
-  Serial3.end();
-  delay(100);
+  //  Serial1.flush();
+  //  Serial2.flush();
+  //  Serial3.flush();
+  //  Serial1.end();
+  //  Serial2.end();
+  //  Serial3.end();
+  //  delay(100);
 
   // Set the data rate for Serial Port 1
   Serial1.begin(38400);
   // And for Serial Port 2.
   Serial2.begin(38400);
   // And for Serial Port 3 for Bluetooth.
-  Serial3.begin(57600);
+  Serial3.begin(115200);
   //
   //Establish Comms, Get the Current Band:
   //
@@ -48,6 +47,29 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
 
   //Initialize the RigPortNumber so once we enter the loop, we will start with Port 1.
   RigPortNumber = 0;
+
+  //Make sure that the TX Inhibit is OFF to the ESP32.
+  digitalWrite(TxInhibit, 0);
+
+  //Wake the ESP32 from sleep, so it can detect if the IC-705 is connected:
+  digitalWrite(WakePin, 1);
+  delay(100);
+  digitalWrite(WakePin, 0);
+  delay(2000);
+  String Response = Serial3Read(true);
+  if (Response == "wake") {
+    Serial.println(F(" Got the Wake signal from the ESP32 BT."));
+  }
+  else {
+    Serial.println(F(" No Wake signal from the ESP32 BT."));
+  }
+
+
+  // IF IC-705, Need to Connect Bluetooth!!!
+  Serial.println(F("Connect IC-705 Bluetooth now!"));
+  delay(3000); // Allow the ESP32 to start up (may have to play with this value
+
+
 
   do {
     delay(100);
@@ -57,7 +79,7 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
 
     RigModel = GetRigModel(RigPortNumber);  //Returns 1 or 2 or 3 when we establish comms
 
-  } while ((RigModel == 0) && ((millis() - StartTime) < 5000));
+  } while ((RigModel == 0) && ((millis() - StartTime) < 30000));
 
   if (RigModel == 0) {
     //Failed to establish Comms
@@ -77,60 +99,52 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
     }
   }
 
-  //For both K3 and KX3, Turn on AI2 Mode.
-  if (RigModel <= 2) {
-    if (AI2Mode) {
-      //Turn the AI mode to AI2;
-      if (SetAiOnOff(2, RigPortNumber)) {
-        //Change the AI2Mode back to FALSE!!!
-        AI2Mode = false;
-        //SetAiOff failed:
-        SendMorse("AI On err ");
-        //Return should Set to ModeError:
-        return "K3 AI On Error";
-      }
-    }
-    else {
-      //Disable the AI (Auto-Info) mode:
-      if (SetAiOnOff(0, RigPortNumber)) {
-        //SetAiOff failed:
-        SendMorse("AI On err ");
-        //Return should Set to ModeError:
-        return "K3 AI On Error";
-      }
+  //For ALL - K3 and KX3 & IC-705 Turn on AI2 Mode. (Value is read in SubPowerTurnedOn().
+  if (AI2Mode) {
+    //Turn the AI mode to AI2;
+    if (SetAiOnOff(2, RigPortNumber)) {
+      //Change the AI2Mode back to FALSE!!!
+      AI2Mode = false;
+      //SetAiOff failed:
+      SendMorse("AI On err ");
+      //Return should Set to ModeError:
+      return "AI On Error";
     }
   }
-  else if (RigModel == 3) {
+  else {
+    //Disable the AI (Auto-Info) mode:
+    if (SetAiOnOff(0, RigPortNumber)) {
+      //SetAiOff failed:
+      SendMorse("AI On err ");
+      //Return should Set to ModeError:
+      return "AI Off Error";
+    }
+  }
+
+  if (RigModel == 3) {
     //IC-705 has Transceive Mode (similar to AI Mode on Elecraft)
     //For the IC-705, it currently works MUCH better with the AI2 Off.
 
     //Try closing the other two Serial Ports:
     Serial1.end();
     Serial2.end();
-    
+
     RigPortNumber = 3;  //Set the PortNumber to 3.
-    Serial.println(F("Detected ICOM on Port 3."));
-
-    //Make sure the Transceive mode (AI2) is OFF.
-    SetAiOnOff(0, RigPortNumber);
-    //Turn off the programmed AI2Mode:
-    AI2Mode = false;
-    //Update the AI2 Mode in Eeprom memory:
-    AI2Mode = EEPROMReadInt(iAI2Mode);
-
-    //    if (SetAiOnOff(2, RigPortNumber)) {
-    //      //Change the AI2Mode back to FALSE!!!
-    //      AI2Mode = false;
-    //      //SetAiOff failed:
-    //      SendMorse("AI On err ");
-    //      //Return should Set to ModeError:
-    //      return "ICOM AI On Error";
-    //    }
+    //Serial.println(F("Detected ICOM on Port 3."));
   }
 
+  //  Get the Current Band setting using the Query mode (Ignore AI2Mode!)
+  boolean TmpHamBand;  //Will be set correctly once we start running.
+  ReadBand(CurrentBand, RigPortNumber, false, TmpHamBand);
+    Act_Byp = TmpHamBand;
+    Bypass(Act_Byp);
+  
 
-  //Get the Current Band setting using the Query mode (Ignore AI2Mode!)
-  CurrentBand = ReadBand(RigPortNumber, false);
+  //Not using the ICOM, Put the ESP32 Bluetooth back to sleep:
+  if (RigModel != 3) {
+    Serial3Cmd("slep");
+  }
+
   Serial.print(F("CurrentBand in PowerOn() returned: ")); Serial.println(CurrentBand);
 
   if (CurrentBand > i6m) {
@@ -200,9 +214,20 @@ void AmpOffRoutine(byte &Mode) {
   lcd.print("                ");
   delay(500);
 
+  //Make sure that the TXInhibit is off.
+  digitalWrite(TxInhibit, 0);
+  delay(100);
+
+  //Send the ESP32 BT Sleep command, we don't know (in this function) which Rig was in use, but if it WASN'T the IC-705, the command will do nothing anyway...
+  if ((Mode != 0) && (Mode != ModeSwrErrorReset)) {  //No need to try the 'slep' when called from the setup() function.
+    Serial.println(F("                            AmpOffRoutine executing 'slep'."));
+    Serial3Cmd("slep");  //No Response expected.
+  }
+
   //Set to i160m, will turn off all relays.
   SetupAmpBandOutput(i160m);
-
+  //Clear the Antenna Outputs:
+  Clear_Outputs();
   //Set Bypass output to off.
   Bypass(0);
 
@@ -275,8 +300,8 @@ void RigPowerDownRoutine(int RigPortNumber, byte &RigModel) {
     }
     else if (RigModel == 3) { //IC-705
       // NOTE: We don't have adjustments for Tune Power on IC-705.
-      //Set the Power to 10 Watts:
-      CIV_SetPower(10);
+      //Reset the Power to 9 Watts:
+      SetPower(9, RigPortNumber);
     }
 
     //Allow the Rig to NOT be turned Off (Press Left Key)
@@ -326,7 +351,7 @@ void RigPowerDownRoutine(int RigPortNumber, byte &RigModel) {
   // And for Serial Port 2.
   Serial2.begin(38400);
   // And for Serial Port 3, Bluetooth.
-  Serial3.begin(57600);
+  Serial3.begin(115200);
 }
 
 

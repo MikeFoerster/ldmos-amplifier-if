@@ -1,153 +1,291 @@
 
-boolean CheckBandUpdate(int &CurrentBand, byte RigPortNumber, byte &Mode, boolean AI2Mode, byte AntennaSwitch) {
+boolean CheckBandUpdate(int &CurrentBand, byte RigPortNumber, byte &Mode, boolean AI2Mode, byte AntennaSwitch, boolean &Act_Byp) {
   //Returns true if the band updates.
   //Used every so many seconds to see if the band changed.
 
-  //Store the CurrentBand:
-  int LastBand = CurrentBand;
+  //Problem: With slow Band Changes on K3, the AI2 modes doesn't always seem to keep up, may loose the last band change.
+
   boolean AntennaSet = false;
+  boolean HamBand = false;
 
   //Check for Band Update:  Takes about 340 ms:
-  CurrentBand = ReadBand(RigPortNumber, AI2Mode);  //Function just above...
+  boolean Changed = false;
+  Changed = ReadBand(CurrentBand, RigPortNumber, AI2Mode, HamBand);
 
-  //Serial.print(F("  CheckBand found CurrentBand = ")); Serial.print(BandString(CurrentBand)); Serial.print(F("  LastBand = ")); Serial.println(BandString(LastBand));
+  
+  //FOR NOW, Set the Act_Byp to the HamBand, we update this every loop, in case the Frequency changed to out of Band...
+  Act_Byp = HamBand;
+  Bypass(Act_Byp);
 
-  //Problem: With slow Band Changes on K3, the AI2 modes doesn't always seem to keep up, may loose the last band change.
-  //Recheck Band if > 10 seconds since last band change:
-  //  static unsigned long LastBandChangeTime
-  //  if ((AI2Mode == true) && (CurrentBand == 254)) {
-  //    CurrentBand = RecheckBand(LastBand);
-  //  }
+  if (Changed) {  //Function just above...
+    Serial.println(F("   BAND CHANGED."));
+    //Update relays to the new band
+    SetupAmpBandOutput(CurrentBand);  //Function just below...
 
-  //If there was no change, we're done here...
-  if ((AI2Mode == true) && (CurrentBand == 254)) {
-    CurrentBand = LastBand;
+    //Set the Power for the Rig to the Power Value stored in Eeprom for the new band setting.
+    if (UpdateBandPower(CurrentBand, RigPortNumber)) {
+      //Set for Continous beep for failed UpdateBandPower???
+      Mode = ModeError;
+    }
+
+    //Serial.print(F("  AntennaSwitch Value: ")); Serial.println(AntennaSwitch);
+    //Set the Antenna output also:
+    if (AntennaSwitch == 0) {
+      //AntennaSwitch is in AUTO mode
+      AntennaSet = SetAutoAntenna(CurrentBand);
+      //Don't know what else to do with the Antenna fail, don't think it should.
+      if (AntennaSet) Serial.println(F("Antenna Failed to Set."));
+    }
+    //The Band Updated.
+    return true;
+  }
+  else {
+    //No Updates.
     return false;
   }
-  if (CurrentBand == LastBand) return false;
-
-  //There must have been a band change detected (Need to Verify)
-  if (CurrentBand <= i30m) {  //Only update for the Valid & Invalid Bands (Not for 255!)
-    //Verify the band change, Use the Query method to verify the change.
-    delay(100);
-    int CurrentBand2 = ReadBand(RigPortNumber, false); //Read Band, Classic Mode (send cmd)
-    if (CurrentBand == CurrentBand2) {
-
-      //Update relays to the new band
-      SetupAmpBandOutput(CurrentBand);  //Function just below...
-
-      //Set the Power for the Rig to the Power Value stored in Eeprom for the new band setting.
-      if (UpdateBandPower(CurrentBand, RigPortNumber)) {
-        //Set for Continous beep for failed UpdateBandPower???
-        Mode = ModeError;
-      }
-
-      //Serial.print(F("  AntennaSwitch Value: ")); Serial.println(AntennaSwitch);
-      //Set the Antenna output also:
-      if (AntennaSwitch == 0) {
-        //AntennaSwitch is in AUTO mode
-        AntennaSet = SetAutoAntenna(CurrentBand);
-      }
-      return AntennaSet;
-    }
-    else {
-      //Band didn't change (verification failed)
-      CurrentBand = LastBand;
-    }
-  }
-  //If we get this far, Band didn't change.
-  return false;
 }
 
 
-int ReadBand(byte RigPortNumber, boolean AI2Mode)
-{
+boolean ReadBand(int &CurrentBand, byte RigPortNumber, boolean AI2Mode, boolean &HamBand) {
+  //Returns true if the band changed.
+  //Returns False if the band did NOT change.
+
   //Using Frequency:  Returns new band as an integer.
   //  Return 254 for AI2Mode for no update (No Comms from AI2 Mode!)
   //  Returns 255 for invalid Frequency.
 
-  int CurrentBand = 0;
-  unsigned int TargetFreq = 0;
+  //Store the CurrentBand and LastHamBand:
+  static int LastBand;
+  static boolean LastHamBand;
 
-  //Serial Comms Buffer Overflow (Greater than 64 bytes) in AI2 is common.  Typically happens on any Band Change.
+  //Serial.print(F(" HamBand coming in is: ")); Serial.print(HamBand); Serial.print(F(" LastHamBand is: ")); Serial.println(LastHamBand);
+
+  unsigned int TargetFreq = 0;
+  //Elecraft A2I Mode, Serial Comms Buffer Overflow (Greater than 64 bytes) in AI2 is common.  Typically happens on any Band Change.
   //  BUT I found a way to increase the Comms Buffer so there is no longer an overflow!
 
-  //If we are in AI2 Mode:
-  if (AI2Mode)
-  {
-
-    if (RigPortNumber == 3)
-    { //ICOM Transceive Mode (Like AI2)
-      TargetFreq = processCatMessages(false);
-    }
-    else
-    { //Elecraft
+  if (RigPortNumber <= 2) { //Elecraft RigPortNumber 1 or 2:
+    //If we are in AI2 Mode:
+    if (AI2Mode) { //Elecraft
       String AI2Output = RadioAiResponse(RigPortNumber);
       int Length = AI2Output.length();
-      if (Length > 0) {
-        //Serial.print(F(" AI2Output Length is ")); Serial.println(AI2Output.length());
-        //Serial.print(F(" AI2 Output: ")); Serial.println(AI2Output);
-
+      if (Length == 0) {
+        //No Change
+        HamBand = LastHamBand;
+        return false;
+      }
+      else { //There is content to the message:
+        //Serial.print(F(" AI2Output Length is ")); Serial.println(AI2Output.length());    //Serial.print(F(" AI2 Output: ")); Serial.println(AI2Output);
         //See Comments about BUFFER OVERRUN on Main File!!!   LEAVE THIS HERE.  PC SPECIFIC MODIFICATION to increase the TX buffer from 64 to 256 bytes.
         if ((Length > 62) && (Length < 65)) {
           Serial.println(F("Check for Buffer OverRun"));
-
         }
-        TargetFreq = ReadFrequencyFromFA(AI2Output);
+
+        TargetFreq = ReadFrequencyFromFA(AI2Output);  //Get the "FA" frequency from the response.
+        if (TargetFreq > 0) {
+          CurrentBand = FreqToBand(TargetFreq, HamBand);
+          //Serial.print(F("Found TargetFreq = ")); Serial.print(TargetFreq); Serial.print(F("   LastBand = ")); Serial.print(LastBand); Serial.print(F("  CurrentBand updated to: ")); Serial.print(CurrentBand); Serial.print(F("  HamBand: ")); Serial.println(HamBand);
+          if (CurrentBand <= i30m) {
+            //Possibly Band Change:
+            if (CurrentBand != LastBand) {
+              //Band Change
+              //HamBand may NOT get set everyloop, store it.
+              HamBand = LastHamBand;
+              LastBand = CurrentBand;
+              return true;
+            }
+            else {
+              LastHamBand = HamBand;
+              return false;
+            }
+          }
+          else if (CurrentBand == 255) { //If the FreqToBand Fails, try the ReadTheFrequency manually!
+            delay(50);
+            Serial.print(F("     AI2 Freq Read Failed on Band Change, Retrying: ")); Serial.println(CurrentBand);
+            TargetFreq = ReadTheFrequency(RigPortNumber);
+            if (TargetFreq > 0) {
+              CurrentBand = FreqToBand(TargetFreq, HamBand);
+              LastHamBand = HamBand;
+            }
+          }
+        }
+        else {
+          //No FA in the string...
+          HamBand = LastHamBand;
+          return false;
+        }
       }
     }
-
-
-    if (TargetFreq > 0)
-    {
-      CurrentBand = FreqToBand(TargetFreq);
-      Serial.print(F("Found TargetFreq = ")); Serial.print(TargetFreq);  Serial.print(F("  CurrentBand updated to: ")); Serial.println(CurrentBand);
-      if (CurrentBand == 255)  //If the FreqToBand Fails, try the ReadTheFrequency manually!
-      {
-        delay(50);
-        //Serial.print(F("     AI2 Freq Read Failed on Band Change, Retrying: ")); Serial.println(CurrentBand);
-        TargetFreq = ReadTheFrequency(RigPortNumber);
-        if (TargetFreq > 0)
-        {
-          CurrentBand = FreqToBand(TargetFreq);
+    else { //Else Standard Query Mode:
+      //Read the Frequency from the Radio and convert to Band (byte)
+      TargetFreq = ReadTheFrequency(RigPortNumber);
+      if (TargetFreq > 0) {
+        //HamBand gets updated every loop...
+        CurrentBand = FreqToBand(TargetFreq, HamBand);
+        if (CurrentBand == LastBand) {
+          //No Change
+          return false;
         }
+        Serial.println(F("  This is the Standard Query!"));
+        LastBand = CurrentBand;
+        return true;
+      }
+      else {
+        //What to do if the Target Frequency Fails?
+        //Serial.println(F(" Elecraft Standard Band Query.  Not sure what to do."));
+        HamBand = LastHamBand;
+        return false;
       }
     }
-    else
-    {
-      return 254;  //No Change
-    }
   }
-  else
-  { //Else Standard Query Mode:
-    //Read the Frequency from the Radio and convert to Band (byte)
-    TargetFreq = ReadTheFrequency(RigPortNumber);
 
-    if (TargetFreq > 0)
-    {
-      CurrentBand = FreqToBand(TargetFreq);
-      //Serial.print(F("  ReadBand (Manual Mode) found TargetFreq =")); Serial.print(TargetFreq); Serial.print(F("  and CurrentBand: ")); Serial.println(CurrentBand);
-      return CurrentBand;
+  else {   //ICOM Transceive Mode (Like AI2) OR Polling Mode: (ESP32 Takes care of both modes)
+    String sBand;
+    //Read the CurrentBand from the ESP32
+    sBand = Serial3Cmd("cbnd");  //Returns 'cband[1/0][2 digit band]
+
+    if (sBand.length() == 7)  {  //Comms sometimees screws up and adds in some extra characters that mess up the decode.  Don't even have to check for: if (sBand != "")
+      //Serial.print(F("    sBand String = ")); Serial.print(sBand); Serial.print(F(" and Length = ")); Serial.println(sBand.length());
+      CurrentBand = sBand.substring(5, 7).toInt();
+      HamBand = sBand.substring(4, 5).toInt();
+      //Serial.print(F("  HamBand = '")); Serial.print(HamBand); Serial.print(F("' and CurrentBand = ")); Serial.println(CurrentBand);
+      //If it fails, run the "band" command to read and decode the CurrentBand.
+      if (CurrentBand == 255) {
+        sBand = Serial3Cmd("band");
+        if (sBand != "") {
+          CurrentBand = sBand.substring(5, 7).toInt();
+          HamBand = sBand.substring(4, 5).toInt();
+          //Serial.println(F(" Re-read band successfully ??"));
+        }
+      }
+      if (LastBand == CurrentBand) {
+        //No Change, HamBand updates every Loop.
+        return false;
+      }
+      else {
+        //Band Changed:
+        LastBand = CurrentBand;
+        return true;
+      }
+    }
+    else {
+      //What to do if the sBand.length !== 7???
+      Serial.print(F(" ICOM sBand !==7.  Reply is: ")); Serial.println(sBand);
+      HamBand = LastHamBand;
+      return false;
     }
   }
-  return 255;
+  Serial.println(F("  Why the end?"));
 }
 
-
-byte FreqToBand(unsigned int TargetFreq) {
-  //Returns Band (as a byte variable)
+byte FreqToBand(unsigned int TargetFreq, boolean & HamBand) {
+  //Returns Band (as a byte variable) and HamBand so that we can disable the Amp when outside the HamBands (using the Bypass() function.
   //Convert the Frequency to Band
-  if ((TargetFreq >= 1800) && (TargetFreq <= 2000))        return  i160m;
-  else if ((TargetFreq >= 3500) && (TargetFreq <= 4000))   return  i80m;
-  else if ((TargetFreq >= 5300) && (TargetFreq <= 5500))   return  i60m;
-  else if ((TargetFreq >= 7000) && (TargetFreq <= 7300))   return  i40m;
-  else if ((TargetFreq >= 10100) && (TargetFreq <= 10150)) return  i30m;
-  else if ((TargetFreq >= 14000) && (TargetFreq <= 14350)) return  i20m;
-  else if ((TargetFreq >= 18068) && (TargetFreq <= 18168)) return  i17m;
-  else if ((TargetFreq >= 21000) && (TargetFreq <= 21450)) return  i15m;
-  else if ((TargetFreq >= 24890) && (TargetFreq <= 24990)) return  i12m;
-  else if ((TargetFreq >= 28000) && (TargetFreq <= 29700)) return  i10m;
-  else if ((TargetFreq >= 50000) && (TargetFreq <= 54000)) return  i6m;
+
+  //For efficiency, run through the Ham Bands First:
+  if ((TargetFreq >= 1800) && (TargetFreq < 2000)) {  //Valid 160m
+    HamBand = true;
+    return  i160m;
+  }
+  else if ((TargetFreq >= 3500) && (TargetFreq < 4000)) { //Valid 80m
+    HamBand = true;
+    return  i80m;
+  }
+  //Currently, 60M antenna is NOT connected, the case below will bypass the 60M enable below, Amp not allowed anyway!
+  else if ((TargetFreq >= 5300) && (TargetFreq < 5500)) { //Valid 60m
+    HamBand = false;  //Disable Amp on 60M
+    return  i60m;
+  }
+  else if ((TargetFreq >= 7000) && (TargetFreq < 7300))  { //Valid 40m
+    HamBand = true;
+    return  i40m;
+  }
+  else if ((TargetFreq >= 10100) && (TargetFreq < 10150)) { //Valid 30m
+    HamBand = false;  //Amp NOT allowed on 30m
+    return  i30m;  //30m enables the 40m band anyway...
+  }
+  else if ((TargetFreq >= 14000) && (TargetFreq < 14350)) { //Valid 20m
+    HamBand = true;
+    return  i20m;
+  }
+  else if ((TargetFreq >= 18068) && (TargetFreq < 18168)) { //Valid 17m
+    HamBand = true;
+    return  i17m;
+  }
+  else if ((TargetFreq >= 21000) && (TargetFreq < 21450)) { //Valid 15m
+    HamBand = true;
+    return  i15m;
+  }
+  else if ((TargetFreq >= 24890) && (TargetFreq < 24990)) { //Valid 12m
+    HamBand = true;
+    return  i12m;
+  }
+  else if ((TargetFreq >= 28000) && (TargetFreq < 29700)) { //Valid 10m
+    HamBand = true;
+    return  i10m;
+  }
+  else if ((TargetFreq >= 50100) && (TargetFreq < 54000)) { //Valid 6m
+    HamBand = true;
+    return  i6m;
+  }
+
+  //Out of Band Frequenies:
+  else if (TargetFreq < 1800) {
+    HamBand = false;
+    return i160m;
+  }
+  else if ((TargetFreq >= 2000) && (TargetFreq < 3000)) {
+    HamBand = false;
+    return  i160m;
+  }
+  else if ((TargetFreq >= 3000) && (TargetFreq < 3500)) {
+    HamBand = false;
+    return  i80m;
+  }
+  else if ((TargetFreq >= 4000) && (TargetFreq < 6000)) {
+    HamBand = false;
+    return  i80m;
+  }
+  else if ((TargetFreq >= 6000) && (TargetFreq < 7000)) {
+    HamBand = false;
+    return  i40m;
+  }
+  else if ((TargetFreq >= 7300) && (TargetFreq < 10100)) {
+    HamBand = false;
+    return  i40m;
+  }
+  else if ((TargetFreq >= 10150) && (TargetFreq < 12000)) {
+    HamBand = false;
+    return  i40m;
+  }
+  else if ((TargetFreq >= 12000) && (TargetFreq < 14000)) {
+    HamBand = false;
+    return  i20m;
+  }
+  else if ((TargetFreq >= 14350) && (TargetFreq < 18068)) {
+    HamBand = false;
+    return  i20m;
+  }
+  else if ((TargetFreq >= 18168) && (TargetFreq < 21000)) {
+    HamBand = false;
+    return  i17m;
+  }
+  else if ((TargetFreq >= 12450) && (TargetFreq < 24890)) {
+    HamBand = false;
+    return  i15m;
+  }
+  else if ((TargetFreq >= 24990) && (TargetFreq < 28000)) {
+    HamBand = false;
+    return  i12m;
+  }
+  else if ((TargetFreq >= 29700) && (TargetFreq < 50100)) {
+    HamBand = false;
+    return  i10m;
+  }
+  else if (TargetFreq >= 54000)  {
+    HamBand = false;
+    return  i6m;
+  }
   else return 255;
 }
 
@@ -177,6 +315,7 @@ boolean UpdateBandPower(int CurrentBand, byte RigPortNumber) {
     }
   }
 
+  Serial.print(F("      UpdateBandPower Setting Watts to: ")); Serial.println(PowerValue);
 
   //Set the Power to the Rig using the "PCxxx" command.
   do {

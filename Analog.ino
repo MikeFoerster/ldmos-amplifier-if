@@ -19,10 +19,13 @@ void StatusChecks(float &Volts, double &AmpTemp, byte &Mode, String &ErrorString
 
   //Update between Receive and Transmit.
   boolean TransmitIndication = digitalRead(XmtLedPin);
-  if ((TransmitIndication == false) && ((Mode == ModeReceive) || (Mode == ModeManual))) Mode = ModeTransmit;
+  if ((TransmitIndication == false) && ((Mode == ModeReceive) || (Mode == ModeManual))) {
+    Mode = ModeTransmit;
+    gTxFlag = true;
+  }
   else if ((TransmitIndication == true) && (Mode == ModeTransmit)) {
     if (gManualMode) Mode = ModeManual;
-    else            Mode = ModeReceive;
+    else  {           Mode = ModeReceive; gTxFlag = false;}
   }
 
   //Update the reading for the Volt Meter
@@ -154,15 +157,15 @@ void SetArduinoFanSpeed(double InternalTemp) {
 
 double Thermistor(int RawADC, boolean Internal) {
   /*
-   *  I DON"T UNDERSTAND WHY THIS WORKS!!! 
-   *    The RawADC variable is NOT used, but the ADC variable is NOT declared anywhere!
-   *  Wihout the RawADC variable, this function returns 74 or 75 degrees, and doesn't change.
-   *  The RasADC seems to 
-   * 
-   */
+      I DON"T UNDERSTAND WHY THIS WORKS!!!
+        The RawADC variable is NOT used, but the ADC variable is NOT declared anywhere!
+      Wihout the RawADC variable, this function returns 74 or 75 degrees, and doesn't change.
+      The RasADC seems to
 
-   //Serial.print(F("RawADC value = ")); Serial.println(RawADC);
-   
+  */
+
+  //Serial.print(F("RawADC value = ")); Serial.println(RawADC);
+
   // From: https://playground.arduino.cc/ComponentLib/Thermistor2
   // Inputs ADC Value from Thermistor and outputs Temperature in Fahrenheit
   //  requires: include <math.h>

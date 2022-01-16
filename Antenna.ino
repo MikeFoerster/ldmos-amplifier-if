@@ -2,14 +2,15 @@
 boolean SetAutoAntenna(int AntennaBand) {
   //SetAutoAntenna uses CurrentBand Values
   //  To change Antennas for each band, change HERE!!!
-  //   Returns true if it passes
-  boolean Valid = true;
+  //   Returns false if it passes
+  boolean Valid = false;
+  String Antenna;
   Clear_Outputs();
 
   switch (AntennaBand) {
     case i160m: {
         //160 Meters
-        Serial.println(F("Set 160M Antenna"));
+        Antenna = "160m";
         digitalWrite(b160, ON);
         break;
       }
@@ -17,14 +18,14 @@ boolean SetAutoAntenna(int AntennaBand) {
     case i6m: //6 Meters, switch in the 80M antenna, I get pretty good SWRs with that antenna.
     case i80m: {
         //80 Meters
-        Serial.println(F("Set 80M Antenna"));
+        Antenna = "80m";
         digitalWrite(b80, ON);
         break;
       }
     case i30m:
     case i40m: {
         //40 Meters
-        Serial.println(F("Set 40M Antenna"));
+        Antenna = "40m";
         digitalWrite(b40, ON);
         break;
       }
@@ -34,17 +35,17 @@ boolean SetAutoAntenna(int AntennaBand) {
     case i12m:
     case i10m: {
         //10 Meters
-        Serial.println(F("Set Beam Antenna"));
+        Antenna = "Beam";
         digitalWrite(bBeam, ON);
         break;
       }
     default: {
         // if nothing else matches, do the default
-        Valid = false;
+        Valid = true;
         break;
       }
   }
-
+   Serial.print(F("  Set Antenna to: ")); Serial.println(Antenna);
   //Return if there is a valid Antanna
   return Valid;
 }

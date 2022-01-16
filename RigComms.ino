@@ -102,7 +102,10 @@ unsigned int ReadFrequencyFromFA(String CommsString) {
 byte GetRigModel(byte RigPortNumber) {
 
   if (RigPortNumber == 3) {  //Test for IC-705:
-    return ICOM_Rig_Model(); //Returns 3 if comms is established
+    String Freq = Serial3Cmd("freq");
+    if (Freq.toInt() > 255) {
+      return 3; //Returns 3 if comms is established
+    }
   }
 
   String Model = RadioCommandResponse("OM;", RigPortNumber);
@@ -168,10 +171,10 @@ unsigned int ReadTheFrequency(byte RigPortNumber) {
   unsigned int iFreq;
 
   if (RigPortNumber == 3) {
-    Serial.println(F("    #### REQUEST ReadTheFrequency"));
-    iFreq = CIV_Read_Frequency();
-    Serial.println(F("    #### COMPLETE ReadTheFrequency"));Serial.println();
-
+    Serial.println(F("    #### REQUEST BT ReadTheFrequency"));
+    String Freq = Serial3Cmd("freq");
+    iFreq = Freq.toInt();
+    Serial.println(F("    #### COMPLETE BT ReadTheFrequency")); Serial.println();
 
     //Return the frequency as an int:
     return iFreq;
@@ -204,6 +207,7 @@ unsigned int ReadThePower(byte RigPortNumber) {
 
 boolean SetTunePower(byte TuneValue, byte RigPortNumber) {
   //Returns true on failure
+  // Elecraft ONLY!
   //Set Menu Command for Tune Power
   int PwrSetting = TuneValue * 10;
   byte count = 5;
@@ -254,14 +258,14 @@ boolean SetPower(byte PowerValue, byte RigPortNumber) {
   //Serial.println(F(" SetPower ##### "));
   if (RigPortNumber == 3)
   {
-    Serial.print(F("    #### REQUEST SetPower: ")); Serial.println(PowerValue);
-    if (CIV_SetPower(PowerValue) == false)
-    {
-      Serial.println(F("    #### COMPLETE (Passed)  SetPower")); Serial.println();
+    //Serial.print(F("    #### REQUEST SetPower: ")); Serial.println(PowerValue);
+    CommandResponse = Serial3Cmd("powr" + String(PowerValue));
+    if (CommandResponse != "nak")    {
+      //Serial.println(F("    #### COMPLETE (Passed)  SetPower")); Serial.println();
       return false;
     }
     else {
-      Serial.println(F("    #### COMPLETE (Failed) SetPower")); Serial.println();
+      //Serial.println(F("    #### COMPLETE (Failed) SetPower")); Serial.println();
       return true;
     }
   }
@@ -286,6 +290,7 @@ boolean SetPower(byte PowerValue, byte RigPortNumber) {
 
     if (PowerResponse != PowerValue) {
       //Command Failed to set the correct value
+      Serial.println(F("    #### COMPLETE (Failed) SetPower")); Serial.println();
       return true;
     }
     return false;
@@ -301,12 +306,24 @@ boolean SetAiOnOff(byte ZeroOr2, byte RigPortNumber) {
 
   //For the IC-705
   if (RigPortNumber == 3) {
-    Serial.println(F("    #### REQUEST CIV_Transceive_On_Off"));
-    if (ZeroOr2 == 0) CIV_Transceive_On_Off(0);
-    else CIV_Transceive_On_Off(1);
-    Serial.println(F("    #### COMPLETE CIV_Transceive_On_Off")); Serial.println();
-    return false;
+    Serial.print(F("    #### REQUEST CIV_Transceive_On_Off to: ")); Serial.println(ZeroOr2);
+    if (ZeroOr2 == 0) {
+      CommandResponse = Serial3Cmd("tnsc0");
+    }
+    else {
+      CommandResponse = Serial3Cmd("tnsc1");
+    }
+
+    if (CommandResponse != "nak") {
+      Serial.println(F("    #### COMPLETE CIV_Transceive_On_Off")); Serial.println();
+      return false;
+    }
+    else {
+      Serial.println(F("    #### FAILED CIV_Transceive_On_Off")); Serial.println();
+      return true;
+    }
   }
+
   else {  //Elecraft:
     if (ZeroOr2 == 2) {
       Command = "ai2;";
@@ -318,9 +335,7 @@ boolean SetAiOnOff(byte ZeroOr2, byte RigPortNumber) {
 
     do {
       CommandResponse = RadioCommandResponse(Command, RigPortNumber);
-
       delay (50);
-
       CommandResponse = RadioCommandResponse("ai;", RigPortNumber);
       CmdResponse = CommandResponse.substring(2, 14).toInt();
       count -= 1;
@@ -338,10 +353,7 @@ void RigPowerOffCmd(byte RigPortNumber) {
 
   if (RigPortNumber == 3) {
     //IC-705:
-    CIV_Power_Off();
-    //Just in case the command fails, Try again...
-    delay(100);
-    CIV_Power_Off();
+    Serial3Cmd("poff");  //Includes a Retry!
   }
   else {
     //Turn Off Rig by sending "PS0" command (No response expected)

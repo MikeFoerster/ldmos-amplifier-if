@@ -135,6 +135,19 @@
 //       Write the Power to the IC-705.
 //       Turn OFF the IC-705
 //5.2    Added Antenna Switching (from 4.6)
+//5.5  Moved CI-V comms over to ESP32.
+//       ESP32 does all the comms, and Answers (through Serial3) for all requests.
+//       Comms requests the CurrentBand, not the frequency.
+//       MEGA pin 35 (Connected to ESP32 GPIO_Num_35) toggles HIGH when we go into Transmit mode, and ESP32 doesn't update Frequency or Band.
+//       ESP32 is put into Deep Sleep when not in use (minimal current)
+//         MEGA pin 33 is the WAKE pin for the ESP32
+//    Added 'HamBand' flag to decoding Frequency to Band to be compatible with Bypass() function, to allow for SWLing, when HamBand == false, Set Amp Bypass.
+//    Changed how the Act_Byp works, took it out of SubReceive and combined with HamBand variable.
+//       Removed a lot of stuff from SubRecieve that I don't think was needed. (i.e.: if (CurrentBand == 255)
+//    Cleaned up some of the code to combine functions for the different Rigs.
+//      Changed CheckBandUpdate() and ReadBand() so the Elecraft stuff worked again.  Moved stuff around a lot.
+//  Compatible with IC-705-BT-ESP-1.5
+
 
 
 //Commands to recognize:
@@ -176,8 +189,8 @@
 // FC: Fan Control      ^FCn; n=fan minimum speed, range of 0 (off) to 6 (high).
 // PJ: Power Adjustment  ^PJnnn;  nnn=power adjustment setting range of 80 to 120  Poewr adjustment value is saved on a per-band basis for current band.  Response is for current band.
 
-const String sVersion = "5.4";
-#define  VERSION_ID "LDMOS 12/21 " + sVersion
+const String sVersion = "5.5";  
+#define  VERSION_ID " LDMOS 12/21 " + sVersion  //Total 16 Chars!!!
 
 
 #define DEBUG
@@ -251,6 +264,8 @@ const int ForwardInputPin = A1;
 const int ReflectedInputPin = A2;
 const int TempReadout = A3;
 const int TempInternal = A4;
+const int WakePin = 33;
+const int TxInhibit = 35;
 
 //byte Mode;
 // 0 is used to know we just went through Setup(), loop() resets to "ModeOff" on startup.
@@ -267,7 +282,7 @@ const byte ModeManual = 10;        //Manual Mode for temporarily running the IC-
 const byte ModeOverTemp = 11;       //OverTemp is active, need to wait for Amp to Cool Down. Dictated by Amp Control board.
 const byte ModeSetupBandPower = 12; //We are in Setup Mode, Adjust Per-Band Power setting (to Eeprom)
 const byte ModeSetupTimeout = 13;  //We are in Setup Mode, adjust the Power Off Timeout.
-const byte ModeSetupBypOper = 14;  //Select if on Power Up if we start in Bypass or Amplify mode.
+const byte ModeSetupBypOper = 14;  //Select if on Power Up if we start in Bypass or Amplify mode.                  DON'T KNOW IF I NEED THIS FUNCTION!!  Complicates things and not really needed.
 const byte ModeSetupAi2Mode = 15;  //Allow turnig AI2 Mode On and Off (Off is Query mode every 2 seconds)
 const byte ModeSetupManualBand = 16;  //Setup the Band when in Manual Mode
 const byte ModeSetupAntenna = 17;     //Set Antenna to either AutoMode (AntennaSwitch==0) or cycle through the antenna settings
@@ -275,6 +290,7 @@ const byte ModeSetupAntenna = 17;     //Set Antenna to either AutoMode (AntennaS
 int FanOutput = 0;
 const int TurnOffTemp = 78;  //CoolDown Temperature
 
+int gTxFlag;
 
 /*
     ############### Setup Procedure ############################
@@ -282,6 +298,15 @@ const int TurnOffTemp = 78;  //CoolDown Temperature
 void setup() {
   // Monitor Comm Port Setup Baud Rate
   Serial.begin(115200);
+  // milliseconds for Serial.readString (default is 1 sec!)
+  Serial3.setTimeout(25);
+
+  //Make sure the ESP32 (DeepSleep) WakePin is off, before initializing it.
+  digitalWrite(WakePin, 0);
+  pinMode(WakePin, OUTPUT); //Wake on true, then reset to off.
+  //Bluetooth TX Inhibit pin:  (Connected to ESP32 GPIO_NUM_33 to Stop all comms during Amp TX.
+  digitalWrite(TxInhibit, 0);
+  pinMode(TxInhibit, OUTPUT);
 
   //CLEAR ALL THE Antenna Relay OUTPUTS FIRST so that when we assign them they don't chatter.
   digitalWrite(b160, OFF);
@@ -357,10 +382,12 @@ void setup() {
   lcd.clear();
   lcd.noDisplay();
 
-  //Use the OffRoutine to disable everything.
-  byte tmpMode = 0; //Var required for OffRoutine
+  Serial.println(F(" Setup()... "));
   //Run the Amp Off Routine, but don't allow the CoolDown mode.
-  AmpOffRoutine(tmpMode);
+  byte TmpMode = 0;
+  AmpOffRoutine(TmpMode);  //Send Mode 0, doesn't matter, must be a variable though!
+
+  gTxFlag = false;
 }
 
 
@@ -368,8 +395,6 @@ void setup() {
      ############### Main LOOP ############################
 */
 void loop() {
-
-  //unsigned long looptime = millis();
 
   //Declare Vars
   int FwdPower = 0;
@@ -385,7 +410,7 @@ void loop() {
   static byte bMinutes;
   static unsigned long ulTimeout;
   static unsigned long ulCommTime;
-  static byte RigModel;  //0 = None, 1 = K3, 2 = KX3
+  static byte RigModel;  //0 = None, 1 = K3, 2 = KX3, 3 = IC-705
   static boolean FirstTransmit;  //Keep track of first transmit cycle so we clear the Fwd/Ref Power on first Transmit.
   static byte Mode;
   static String ErrorString;
@@ -394,12 +419,16 @@ void loop() {
   static boolean Cleared;  //Used to clear the variables in the ModeOff case.
   static byte AntennaSwitch; //AntennaSwitch==0, Auto Mode, or use CurrentBand values for Manual
 
+//  unsigned long looptime = millis();
+//  Serial.print(F(" LoopTime = ")); Serial.println(millis() - looptime);
+
   //Used for Startup Only:
   if (Mode == 0) Mode = ModeOff;
 
+
   //Read Internal Temp every 20 seconds and turn on the fan if necessary (ALL Modes):
   //  NOTE: This has NEVER come on, other than early testing.  Arduino runs cool.
-  if ((millis() - TemperatureReadTime) > 20000) {
+  if ((millis() - TemperatureReadTime) > 20000) {  //(Runtime 1 ms.)
     ReadInternalTemp();  //Sets internal Fan speed (rarely needed)
     //Reset for the next 20 seconds:
     TemperatureReadTime = millis();
@@ -408,10 +437,12 @@ void loop() {
   //Only used for Debug:
   PrintTheMode(Mode, "");
 
-  //Check the buttons:
+  //Check the buttons:  (Runtime 2-3 ms with no buttons.)
   HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp, AI2Mode, AntennaSwitch);
 
-  //Run a few checks...
+
+
+  //Run a few checks...  (Runtime 50-70ms for IC-705 in Recieve mode)
   if (Mode >= ModeReceive) {  //Running
     //Status Checks
     //  Transmit: Change Mode to ModeTransmit.
@@ -432,28 +463,26 @@ void loop() {
       Mode = ModePrepareOff;
     }
 
-    if (Mode != ModeManual) {  //Don't check the Current Band when ModeManual!!!!!
-      //Check the Band every few seconds (FA; Cmd Mode), or Every Loop for AI2Mode:
-      if ((((millis() - ulCommTime) > 5000) && (Mode == ModeReceive)) || (AI2Mode))  {
-        //if (((millis() - ulCommTime) > 2000) &&  (Mode == ModeReceive))  {
-        //Check and update the Band.
-        if (Mode != ModeSetupBandPower) { //Don't Update for ModeSetupBandPower, it can change bands using the Left/Right buttons.
-          //Serial.println(F(" CheckBandUpdate..."));
-          if (CheckBandUpdate(CurrentBand, RigPortNumber, Mode, AI2Mode, AntennaSwitch)) {
-            //Band change detected.  Read the data in Eeprom, should we start in Bypass(0) or Operate(1) mode?
-            Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
-            Bypass(Act_Byp);
-          }
-        }
+    //Receive Mode, AI2Mode active:
+    if ((Mode == ModeReceive) &&  (AI2Mode)) {
+      //Check Band every loop in AI2Mode:
+      CheckBandUpdate(CurrentBand, RigPortNumber, Mode, AI2Mode, AntennaSwitch, Act_Byp);
+      //      unsigned long looptime = millis();
+      //      Serial.print(F(" LoopTime = ")); Serial.println(millis() - looptime);
+    }
+    else if ((Mode == ModeReceive) &&  (!AI2Mode))  {
+      //Receive Mode, AI2Mode IN-Active (Polling):
+      //Check Band using Polling Mode, every 5 seconds:
+      if ((millis() - ulCommTime) > 5000) {
+        CheckBandUpdate(CurrentBand, RigPortNumber, Mode, AI2Mode, AntennaSwitch, Act_Byp);
         //Reset for the next cycle update: (Note: This is ALSO set during Transmit cycle so we don't update during TX)
         ulCommTime = millis();
       }
     }
-    else {
-      //Manual Mode (IC-705 Temporary)
-      Act_Byp = bool(EEPROMReadInt(iBypassModeEeprom));
-      Bypass(Act_Byp);
-    }
+    //ModeManual, nothing changes...    We don't check the Current Band when ModeManual!
+    //Manual Mode (IC-705 Temporary)
+
+
   }
 
 
@@ -472,8 +501,10 @@ void loop() {
           //Clear the RigModel variable so we no longer write to the K3:
           RigModel = 0;
           ErrorString = "";
-          Cleared = true;
           AntennaSwitch = 0; //Reset Antenna to AutoMode.
+          digitalWrite(TxInhibit, 0);
+          Cleared = true;
+          //Serial1.end();
         }
         delay(100);  //ModeOff main delay...
         break;
@@ -506,7 +537,7 @@ void loop() {
         break;
       }
     case ModeReceive: {
-        SubReceive(CurrentBand, Act_Byp, FirstTransmit, AmpTemp, RigPortNumber);
+        SubReceive(FirstTransmit, AmpTemp, RigPortNumber);
         break;
       }
     case ModeManual: {
@@ -514,7 +545,7 @@ void loop() {
         break;
       }
     case ModeTransmit: {
-        SubTransmit(FwdPower, RefPower, FirstTransmit, Swr, ulCommTime);
+        SubTransmit(FwdPower, RefPower, FirstTransmit, Swr, ulCommTime, RigPortNumber);
         break;
       }
     case ModeOverTemp: {
@@ -549,6 +580,7 @@ void loop() {
 
   }  //End of switch(Mode)
 
+
   //UpdateDisplay takes ~200ms (Most is in the Display Update)
   UpdateDisplay(Mode, CurrentBand, FwdPower, RefPower, Swr, Volts, Act_Byp, AmpTemp, bHours, bMinutes, AntennaSwitch, ErrorString);
 
@@ -567,5 +599,5 @@ void loop() {
     AmpGT110 = false;  //Clear the flag.
   }
 
-  //Serial.print(F(" LoopTime = ")); Serial.println(millis() - looptime);
+
 }  //End of Main Loop()

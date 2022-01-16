@@ -168,6 +168,11 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
 
       //If The Up button is pressed, change from Bypass to Amplify
       switch (Mode) {
+        case ModeOff: {
+            //ModeOff: Wake the ESP32 from sleep, so it can detect if the IC-705 is connected:
+            WakeBt();
+            break;
+          }
         case ModeReceive: {
             //Up Button, Change from Bypass to Operate (Valid operating band only!)
             if (CurrentBand <= i6m) {
@@ -203,7 +208,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
         case ModeSetupAi2Mode: {
             EEPROMWriteInt(iAI2Mode, 1);
             AI2Mode = EEPROMReadInt(iAI2Mode);
-
+            SetAiOnOff(AI2Mode, RigPortNumber);  //Update the mode to the rig.
             break;
           }
         case ModeSetupAntenna: {
@@ -224,6 +229,11 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
     if (buttons & BUTTON_DOWN) {
       //Off Mode and AutoMode, Ignore
       switch (Mode) {
+        case ModeOff: {
+            //ModeOff: Wake the ESP32 from sleep, so it can detect if the IC-705 is connected:
+            SleepBt();
+            break;
+          }
         case ModeReceive: {
             //If In Bypass Mode, Change back to Operate
             Act_Byp = 0;
@@ -253,6 +263,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
         case ModeSetupAi2Mode: {
             EEPROMWriteInt(iAI2Mode, 0);
             AI2Mode = EEPROMReadInt(iAI2Mode);
+            SetAiOnOff(AI2Mode, RigPortNumber);  //Update the mode to the rig.
             break;
           }
         case ModeSetupAntenna: {
