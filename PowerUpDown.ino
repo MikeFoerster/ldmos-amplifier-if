@@ -2,7 +2,7 @@
 //
 // Turn On Routine
 //
-String PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
+String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
   //Returns 0 = Passed
   //Returns 1 = Failed to Establish Comms
   //Returns 2 = Failed to Disable K2 Internal Amp
@@ -29,29 +29,34 @@ String PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
   //Make sure the ports are closed (becomes a problem when reloading code thru IDE)
   Serial1.flush();
   Serial2.flush();
+  Serial3.flush();
   Serial1.end();
   Serial2.end();
+  Serial3.end();
   delay(100);
-  
+
   // Set the data rate for Serial Port 1
   Serial1.begin(38400);
   // And for Serial Port 2.
   Serial2.begin(38400);
-
+  // And for Serial Port 3 for Bluetooth.
+  Serial3.begin(57600);
   //
   //Establish Comms, Get the Current Band:
   //
   unsigned long StartTime = millis();  //Set Start time for 'do' loop
 
   //Initialize the RigPortNumber so once we enter the loop, we will start with Port 1.
-  RigPortNumber = 2;
+  RigPortNumber = 0;
 
   do {
     delay(100);
     //Try to read the Band from the Radio, trying both comm ports: (Using If/Else construct)
-    RigPortNumber = (RigPortNumber == 1) ? 2 : 1;
+    RigPortNumber++;
+    if (RigPortNumber == 4) RigPortNumber = 1;
 
-    RigModel = GetRigModel(RigPortNumber);  //Returns 1 or 2 when we establish comms
+    RigModel = GetRigModel(RigPortNumber);  //Returns 1 or 2 or 3 when we establish comms
+
   } while ((RigModel == 0) && ((millis() - StartTime) < 5000));
 
   if (RigModel == 0) {
@@ -72,8 +77,57 @@ String PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
     }
   }
 
-  //Get the Current Band setting:
-  CurrentBand = ReadBand(RigPortNumber);
+  //For both K3 and KX3, Turn on AI2 Mode.
+  if (RigModel <= 2) {
+    if (AI2Mode) {
+      //Turn the AI mode to AI2;
+      if (SetAiOnOff(2, RigPortNumber)) {
+        //Change the AI2Mode back to FALSE!!!
+        AI2Mode = false;
+        //SetAiOff failed:
+        SendMorse("AI On err ");
+        //Return should Set to ModeError:
+        return "K3 AI On Error";
+      }
+    }
+    else {
+      //Disable the AI (Auto-Info) mode:
+      if (SetAiOnOff(0, RigPortNumber)) {
+        //SetAiOff failed:
+        SendMorse("AI On err ");
+        //Return should Set to ModeError:
+        return "K3 AI On Error";
+      }
+    }
+  }
+  else if (RigModel == 3) {
+    //IC-705 has Transceive Mode (similar to AI Mode on Elecraft)
+    //For the IC-705, it currently works MUCH better with the AI2 Off.
+
+    RigPortNumber = 3;  //Set the PortNumber to 3.
+    Serial.println(F("    Detected ICOM on Port 3."));
+
+    //Make sure the Transceive mode (AI2) is OFF.
+    SetAiOnOff(0, RigPortNumber);
+    //Turn off the programmed AI2Mode:
+    AI2Mode = false;
+    //Update the AI2 Mode in memory:
+    AI2Mode = EEPROMReadInt(iAI2Mode);
+
+    //    if (SetAiOnOff(2, RigPortNumber)) {
+    //      //Change the AI2Mode back to FALSE!!!
+    //      AI2Mode = false;
+    //      //SetAiOff failed:
+    //      SendMorse("AI On err ");
+    //      //Return should Set to ModeError:
+    //      return "ICOM AI On Error";
+    //    }
+  }
+
+
+  //Get the Current Band setting using the Query mode (Ignore AI2Mode!)
+  CurrentBand = ReadBand(RigPortNumber, false);
+  Serial.print(F("ReadBand in PowerOn returned: ")); Serial.println(CurrentBand);
 
   if (CurrentBand > i6m) {
     //Invalid Amplifier Band: 60m, 30m, or could be somewhere outside the bands
@@ -83,8 +137,22 @@ String PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
 
   //Display Contact and PortNumber onbottom line
   lcd.setCursor(0, 1);
-  //If-Else construct
-  RigName = (RigModel == 1) ? "   K3S on Port " : "   KX3 on Port ";
+
+  switch (RigModel) {
+    case 1: {
+        RigName = "   K3S on Port ";
+        break;
+      }
+    case 2: {
+        RigName = "   KX3 on Port ";
+        break;
+      }
+    case 3: {
+        RigName = "   IC-705 Port ";
+        break;
+      }
+  }
+
   lcd.print(RigName + String(RigPortNumber));
 
   //Turn the power on to the Amplifier
@@ -107,6 +175,10 @@ String PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
     //Set for continouse beep for failed UpdateBandPower???
     return "Power Seting Err";
   }
+
+  //Setup the Antenna Output:
+  SetAutoAntenna(CurrentBand);
+
   //On:
   SendMorse("On ");
   return ErrorString;  //OK
@@ -116,7 +188,7 @@ String PowerUpRoutine(int &CurrentBand, byte &RigPortNumber,  byte &RigModel) {
 //
 // Shut Down Routine
 //
-void OffRoutine(byte &Mode) {
+void AmpOffRoutine(byte &Mode) {
   //Clear the Antenna Output Relays to Off Mode (Set to 160M which turns off all band relays.
 
   lcd.print("Off             ");
@@ -127,148 +199,210 @@ void OffRoutine(byte &Mode) {
   //Set to i160m, will turn off all relays.
   SetupBandOutput(i160m);
 
-  //Turn Off Power to the Amp.
-  digitalWrite(PowerSwitchPin, OFF);
-
   //Set Bypass output to off.
   Bypass(0);
 
   SendMorse("Off ");
 
-  //Turn off the Backlight and Display.
-  lcd.setBacklight(0); //OFF
-  lcd.setCursor(0, 0);
-  lcd.noDisplay();
-
-  //Set the Mode to ModeOff
-  Mode = ModeOff;
+  Mode = ModeCoolDown;
 }
 
-void RigPowerDownRoutine(int RigPortNumber, byte RigModel) {
+void RigPowerDownRoutine(int RigPortNumber, byte &RigModel) {
+
   //For the K3, Re-enable the KPA3 internal amplifier.
   //  We only go through this once!!!
   lcd.display();
   lcd.setBacklight(1);  //ON
-  if (RigModel == 1) {
-    //Turn the K3 Internal Amp Back ON.
-    if (K3AmpOnOff(RigPortNumber, true)) {
-      lcd.setCursor(0, 0);
-      lcd.print("K3 Amp NOT RESET ");  //Display the Error
-      SendMorse("No Rig ");
-      delay(2000);
-      //This is not a critical fault, but Setting the K3 KPA3 amp to BYPASS assures us that we can't overdrive the LDMOS amp.
-      // In this case, it was not Re-Enabled.
 
+  if (!gManualMode) {
+    //Turn the AI2 to Off (if it's already Off, that's OK...
+    if (SetAiOnOff(0, RigPortNumber)) {
+      //SetAiOff failed:
+      lcd.print("AI OFF Error ");  //Display the Error
+      SendMorse("AI Off Err");
+      delay(4000);
+    }
+    delay(100);
+
+    if (RigModel == 1) {
+      //Turn the K3 Internal Amp Back ON.
+      if (K3AmpOnOff(RigPortNumber, true)) {
+        lcd.setCursor(0, 0);
+        lcd.print("K3 Amp NOT RESET ");  //Display the Error
+        SendMorse("No Rig ");
+        delay(4000);
+        //This is not a critical fault, but Setting the K3 KPA3 amp to BYPASS assures us that we can't overdrive the LDMOS amp.
+        // In this case, it was not Re-Enabled.
+      }
       //Set Tune Power to 10 Watts for the K3.
       if (SetTunePower(10, RigPortNumber)) {
         //SetTunePower Failed
         lcd.setCursor(0, 1);
         lcd.print("Reset Tune Fail ");
         SendMorse("Tune Err");
+        delay(4000);
+      }
+      //Reset Power to 28 Watts:
+      if (SetPower(28, RigPortNumber)) {
+        //SetPower Failed
+        lcd.setCursor(0, 1);
+        lcd.print("Reset Power Fail ");
+        SendMorse("Pwr Err");
+        delay(4000);
       }
     }
-  }
-  else {  //KX3:
-    //Set Tune Power to 3 Watts for the KX3.
-    if (SetTunePower(3, RigPortNumber)) {
-      lcd.setCursor(0, 0);
-      lcd.print("Reset Tune Fail ");  //Display the Error
-      //SetTunePower Failed
-      SendMorse("Tune Err");
-      delay(2000);
+    else if (RigModel == 2) {  //KX3:
+      //Set Tune Power to 3 Watts for the KX3.
+      if (SetTunePower(3, RigPortNumber)) {
+        lcd.setCursor(0, 0);
+        lcd.print("Reset Tune Fail ");  //Display the Error
+        //SetTunePower Failed
+        SendMorse("Tune Err");
+        delay(4000);
+      }
+      //Reset Power to 10 Watts:
+      if (SetPower(10, RigPortNumber)) {
+        //SetPower Failed
+        lcd.setCursor(0, 1);
+        lcd.print("Reset Power Fail ");
+        SendMorse("Pwr Err");
+        delay(4000);
+      }
     }
+    else if (RigModel == 3) { //IC-705
+      // NOTE: We don't have adjustments for Tune Power on IC-705.
+      //Set the Power to 10 Watts:
+      CIV_SetPower(10);
+    }
+
+    //Allow the Rig to NOT be turned Off (Press Left Key)
+    lcd.setCursor(0, 0);
+    lcd.print("To Keep Rig On  ");
+    lcd.setCursor(0, 1);
+    lcd.print("Push Left Button");
+
+    //Variables needed for arguments, but not used:
+    int CurrentBand = 255;
+    byte Mode = ModeOff;
+    unsigned long ulTimeout = 0;
+    byte bHours = 0;
+    byte bMinutes = 0;
+    boolean Act_Byp = 0;
+    boolean AI2Mode = 0;
+    byte AntennaSwitch = 0;
+
+    //Keep reading the buttons for 4 seconds, see if the user presses the Left button (set CurrentBand=200) to keep the Rig On.
+    unsigned long WaitTime = millis();
+    do {
+      delay(50);
+      HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp, AI2Mode, AntennaSwitch);
+    } while (((millis() - WaitTime) < 4000) && (CurrentBand == 255));
+
+    //If HandleButtons returned CurrentBand == 200, then DON'T turn off the Rig.
+    if (CurrentBand != 200) {
+      lcd.setCursor(0, 0);
+      lcd.print("Turning Rig Off ");
+      lcd.setCursor(0, 1);
+      lcd.print("                ");
+      //When we Timeout, also turn off the radio and close the Comm Ports.
+      RigPowerOffCmd(RigPortNumber);
+    }
+
+    //Reset RigModel to 0.
+    RigModel = 0;
+
   }
+  //Turn off the gManualMode:
+  else gManualMode = false;
 
-  //Allow the Rig to NOT be turned Off (Press Left Key)
-  lcd.setCursor(0, 0);
-  lcd.print("To Keep Rig On  ");
-  lcd.setCursor(0, 1);
-  lcd.print("Push Left Button");
-
-  //Variables needed for arguments, but not used:
-  int CurrentBand = 255;
-  byte Mode = ModeOff;
-  unsigned long ulTimeout = 0;
-  byte bHours = 0;
-  byte bMinutes = 0;
-  bool Act_Byp = 0;
-  
-  //Keep reading the buttons for 10 seconds, see if the user presses the Left button (set CurrentBand=200) to keep the Rig On.
-  unsigned long WaitTime = millis();
-  do {
-    delay(50);
-    HandleButtons(Mode, RigPortNumber, CurrentBand, bHours, bMinutes, ulTimeout, Act_Byp);
-  } while (((millis() - WaitTime) < 10000) && (CurrentBand == 255));
-
-  //If HandleButtons returned CurrentBand == 200, then DON'T turn off the Rig.
-  if (CurrentBand != 200) {
-    //When we Timeout, also turn off the radio and close the Comm Ports.
-    RigPowerOff(RigPortNumber);
-  }
-
-  Serial1.end();
-  Serial2.end();
-
-
-  //Turn off the display.
-  lcd.setBacklight(0);
-  lcd.setCursor(0, 0);
-  lcd.noDisplay();
-  lcd.setBacklight(0);
+  //DON'T Flush & End the serial Ports, this causes the P3 on the K3 to tie up comms, and P3 stops responding!
+  // Instead, make sure they are initialized:
+  // Initialize the Serial Ports, especially for the Setup() routine when the RigPowerDownRoutine() is called:
+  Serial1.begin(38400);
+  // And for Serial Port 2.
+  Serial2.begin(38400);
+  // And for Serial Port 3, Bluetooth.
+  Serial3.begin(57600);
 }
 
-void PrintTheMode(byte Mode) {
+
+void PrintTheMode(byte Mode, String Optional) {
   //This is a Debug Routine Only, Print out the Mode as a string...
-  static bool RunOnce;
+  static boolean RunOnce;
   static byte PreviousMode;
   if ((Mode != PreviousMode) || (RunOnce == false)) {
     Serial.print(F("Mode="));
     switch (Mode) {
       case ModeOff: {
-          Serial.println(F("Off"));
+          Serial.print(F("ModeOff"));
           break;
         }
       case ModePowerTurnedOn: {
-          Serial.println(F("PowerTurnOn"));
+          Serial.print(F("ModePowerTurnedOn"));
           break;
         }
       case ModeSwrError: {
-          Serial.println(F("SwrError"));
+          Serial.print(F("ModeSwrError"));
+          break;
+        }
+      case ModePrepareOff: {
+          Serial.print(F("ModePrepareOff"));
+          break;
+        }
+      case ModeCoolDown: {
+          Serial.print(F("ModeCoolDown"));
           break;
         }
       case ModeSwrErrorReset: {
-          Serial.println(F("SwrErrorReset"));
+          Serial.print(F("ModeSwrErrorReset"));
           break;
         }
       case ModeError: {
-          Serial.println(F("Error"));
+          Serial.print(F("ModeError"));
           break;
         }
       case ModeReceive: {
-          Serial.println(F("Receive"));
+          Serial.print(F("ModeReceive"));
           break;
         }
       case ModeTransmit: {
-          Serial.println(F("Transmit"));
+          Serial.print(F("ModeTransmit"));
+          break;
+        }
+      case ModeManual: {
+          Serial.print(F("ModeManual"));
           break;
         }
       case ModeOverTemp: {
-          Serial.println(F("OverTemp"));
+          Serial.print(F("ModeOverTemp"));
           break;
         }
       case ModeSetupBandPower: {
-          Serial.println(F("SetupBandPower"));
+          Serial.print(F("ModeSetupBandPower"));
           break;
         }
       case ModeSetupTimeout: {
-          Serial.println(F("SetupPowerOffTimeout"));
+          Serial.print(F("ModeSetupTimeout"));
           break;
         }
       case ModeSetupBypOper: {
-          Serial.println(F("SetupBypOperMode"));
+          Serial.print(F("ModeSetupBypOper"));
+          break;
+        }
+      case ModeSetupAi2Mode: {
+          Serial.print(F("ModeSetupAi2Mode"));
+          break;
+        }
+      case ModeSetupManualBand: {
+          Serial.print(F("ModeSetupManualBand"));
+          break;
+        }
+      case ModeSetupAntenna: {
+          Serial.print(F("ModeSetupAntenna"));
           break;
         }
     }
+    Serial.println(" " + Optional);
     PreviousMode = Mode;
     RunOnce = true;
   }

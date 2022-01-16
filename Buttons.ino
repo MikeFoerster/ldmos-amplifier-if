@@ -1,9 +1,9 @@
 //
 // Handle the Button Presses
 //
-void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, bool &Act_Byp) {
+void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHours, byte &bMinutes, unsigned long &ulTimeout, boolean &Act_Byp, boolean &AI2Mode, byte &AntennaSwitch) {
   boolean bWriteComplete = false;  //Used for Long Key Presses
-  static int Hours;
+  static int Hours;  //WHY IS THIS HERE????
   static int EepromBypMode;
   static int PowerSetting;  //Store the updated PowerSetting in Setup Band Power mode.
   static int StartSetting;  //Store the PowerSetting for when we enter the PowerSetting mode.
@@ -12,6 +12,8 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
       Read the Buttons and update the Upper Display as required:
   */
   uint8_t buttons = lcd.readButtons();
+
+  PrintTheMode(Mode, "Entering HandleButtons");
 
   //If there was a button pushed, handle it...
   if (buttons) {
@@ -39,9 +41,18 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             Mode = ModePowerTurnedOn;
             break;
           }
-
+        case ModeCoolDown: {
+            //ModeCoolDown : Change to ModePowerTurnedOn so we re-start the Power Up sequence.
+            Mode = ModePowerTurnedOn;
+            break;
+          }
+        case ModeError: {
+            //We are in ModeError, pressing Select button will move to ModePowerTurnedOn
+            Mode = ModePowerTurnedOn;
+            break;
+          }
         case ModeReceive: {
-            //Select button pressed while in Recieve Mode, Change to ModeSetupBandPower:
+            //Select button pressed while in ModeReceive, Change to ModeSetupBandPower:
 
             //This function just READs the current setting and displays ONLY the Error Messages such as "Already Max Power"
             //  on the second line while in the ModeSetupBandPower mode.
@@ -52,7 +63,20 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             Mode = ModeSetupBandPower;
             break;
           }
+
+        //        case ModeManual: {
+        //            //Select button pressed while in Manual Mode, Change to ModeSetupTimeout:
+        //            //This function just READs the current setting and displays ONLY the Error Messages such as "Already Max Power"
+        //            //  on the second line while in the ModeSetupBandPower mode.
+        //            // Current Setting stored in Eeprom.  Max Power allowed per band is hard coded.
+        //            //Need to initialize the Hours for the ModeSetupTimeout mode.
+        //            bHours = EEPROMReadInt(iHoursEeprom);
+        //            Mode = ModeSetupTimeout;
+        //            break;
+        //          }
+
         case ModeSetupBandPower: {
+            //Select button pressed while in SetupBandPower Mode, Change to ModeSetupTimeout:
             //Before entering next mode (ModeSetupTimeout),
             //  Write the new value to Eeprom (if it changed):
             if (PowerSetting != StartSetting) {
@@ -84,7 +108,6 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
               //Recalculate the Timeout after the adjustment.
               CalculateTimeout(bHours, bMinutes, ulTimeout);
             }
-
             //Read the EepromBypMode setting (It's either a 0 or 1).
             StartSetting = EEPROMReadInt(iBypassModeEeprom);
             EepromBypMode = StartSetting;
@@ -95,15 +118,50 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
           }
 
         case ModeSetupBypOper: {
-            //Must write the Opr/Byp value when changed (rather than here) because the Display uses the Eeprom value to display the changes.
-
-            //Select Key, we are in ModeSetupBypOper, change back to ModeReceive.
-            Mode = ModeReceive;
+            //Select Key, we are in ModeSetupBypOper, change to ModeSetupAi2Mode.
+            //The Opr/Byp is written when the value is changed (rather than here) because the Display uses the Eeprom value to display the changes.
+            Mode = ModeSetupAi2Mode;
             break;
           }
 
-          case ModeError: {
-            Mode = ModePowerTurnedOn;
+        case ModeSetupAi2Mode: {
+            //Select Key, we are in ModeSetupAi2Mode, change to ModeSetupAntenna.
+
+            //First, Change the AI Mode according to the User Request:
+            if (EEPROMReadInt(iAI2Mode)) SetAiOnOff(2, RigPortNumber);
+            else  SetAiOnOff(0, RigPortNumber);
+            //Update the AI2 Mode:
+            AI2Mode = EEPROMReadInt(iAI2Mode);
+
+            //Change Modes:
+            Mode = ModeSetupAntenna;
+            break;
+          }
+
+        case ModeSetupAntenna: {
+            //Select Key, we are in ModeSetupAntenna, change to:
+            // if gManual set: ModeManual
+            // OR ModeReceive.
+
+            //If we changed back to the AUTO setting, reset to the CurrentBand.
+            if (AntennaSwitch == 0) SetAutoAntenna(CurrentBand);
+
+            if (gManualMode == true) {
+              //Read the Last Band from Eeprom:
+              //CurrentBand = EEPROMReadInt(iManBand);  I don't think this is needed!
+              Mode = ModeSetupManualBand;
+            }
+            else Mode = ModeReceive;
+            break;
+          }
+
+        case ModeSetupManualBand: { //Should be the LAST in the string so that pressing the Select, gets you out to Receive next...
+            //Select button pressed while in ModeSetManualBand, Change to ModeReceive:
+            //Before Reseting back to ModeManual, write the Manual CurrentBand to Eeprom
+            EEPROMWriteInt(iManBand, CurrentBand);
+
+            //Reset back to Recieve Mode:
+            Mode = ModeReceive;
             break;
           }
       } //End of switch Mode
@@ -131,7 +189,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
         case ModeSetupBandPower: {
             //Up Button pressed, Increement the Power by 1 watt:
             byte Increment = 2;  //Setup to Increment the BumpPowerSetting using the "2", Also writes to Eeprom.
-            PowerSetting = BumpPowerSetting(Increment, CurrentBand);//Write the vale that was changed to Eeprom
+            PowerSetting = BumpPowerSetting(Increment, CurrentBand);   //Write the vale that was changed to Eeprom
             break;
           }
         case ModeSetupTimeout: {
@@ -147,6 +205,21 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             EepromBypMode = 1;
             //Write the new value to Eeprom so the Display Updates too!
             EEPROMWriteInt(iBypassModeEeprom, EepromBypMode);
+            break;
+          }
+        case ModeSetupAi2Mode: {
+            EEPROMWriteInt(iAI2Mode, 1);
+            break;
+          }
+        case ModeSetupAntenna: {
+            AntennaSwitch = ManualBandIncDec(true); //True will increment by 1
+            break;
+          }
+        case ModeSetupManualBand: {
+            if (CurrentBand < 32)  CurrentBand = CurrentBand + 2;
+            else CurrentBand = 0;
+            //Update relays to the new band
+            SetupBandOutput(CurrentBand);
             break;
           }
       }
@@ -182,6 +255,21 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             EEPROMWriteInt(iBypassModeEeprom, EepromBypMode);
             break;
           }
+        case ModeSetupAi2Mode: {
+            EEPROMWriteInt(iAI2Mode, 0);
+            break;
+          }
+        case ModeSetupAntenna: {
+            AntennaSwitch = ManualBandIncDec(false); //False will Decrement by 1
+            break;
+          }
+        case ModeSetupManualBand: {
+            if (CurrentBand > 0)  CurrentBand = CurrentBand - 2;
+            else CurrentBand = 32;
+            //Update relays to the new band
+            SetupBandOutput(CurrentBand);
+            break;
+          }
       }
     }  //End of 'if (DOWN)'
 
@@ -204,8 +292,40 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
           }
         case ModeSetupBandPower: {
             //Cycle the Band Up to 6m, then drop back down to 160.
-            if (CurrentBand > i160m)        CurrentBand = CurrentBand - 2;
+            if (CurrentBand > i160m)CurrentBand = CurrentBand - 2;
             else CurrentBand = i6m;
+            break;
+          }
+        case ModeError: {  //Left Button Changes to ModeManual!!!!
+            gManualMode = true;
+            CurrentBand = EEPROMReadInt(iManBand);
+            Mode = ModeSetupManualBand;
+            SendMorse("MAN");
+
+            //We need to take care of some of the stuff from the Power Up routines
+            //Turn the power on to the Amplifier
+            digitalWrite(PowerSwitchPin, ON);
+            delay(2000);  //Allow time for the Power Supply to come up to voltage.
+            // (Occasionally get a beep from the "Display" check if not long enough.)
+
+            //Check the reading for the Volt Meter
+            float Volts = ReadVoltage();
+            if (Volts < 30) {
+              //Power Up FAILED, turn the power pin back off.
+              digitalWrite(PowerSwitchPin, OFF);
+              //return "50 Volt Fail";  //Sets ErrorString and ModeError.
+            }
+
+            //We are in Manual Mode, Read the LAST Manual Band from Eeprom and Update the Band relays:
+            CurrentBand = EEPROMReadInt(iManBand);
+            SetupBandOutput(CurrentBand);
+
+            //RESET the Timeout:
+            bHours = EEPROMReadInt(iHoursEeprom);
+            bMinutes = 0;
+            //Recalculate the Timeout after the adjustment.
+            CalculateTimeout(bHours, bMinutes, ulTimeout);
+
             break;
           }
         default: {
@@ -216,9 +336,10 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
       }
     }
 
+
     //RIGHT
     if (buttons & BUTTON_RIGHT) {
-      if (Mode == ModeReceive) {
+      if ((Mode == ModeReceive) || (Mode == ModeManual)) {
         //RESET the Timeout:
         bHours = EEPROMReadInt(iHoursEeprom);
         bMinutes = 0;
@@ -231,8 +352,8 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
         else CurrentBand = i160m;
       }
     }
-  }  //End of if (buttons)
 
+  }  //End of if (buttons)
 
   //Wait for the Key to be released, so we don't get mulitple Entries (and check for OFF!)
   unsigned long StartTime = millis();
@@ -241,11 +362,14 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
 
     //Loop here until the button is released.  We can detect if the User wants to turn the system off.
     if (bWriteComplete == false) {
-      if ((millis() - StartTime > 2000) && (buttons & BUTTON_SELECT)) {
+      if ((millis() - StartTime > 1500) && (buttons & BUTTON_SELECT)) {
         //2 Second SELECT button turns the unit OFF.
-        if (Mode == ModeError) OffRoutine(Mode);
-        else OffRoutine(Mode); 
+        lcd.setCursor(0, 0);
+        lcd.print("Power OFF       ");
+        lcd.setCursor(0, 1);
+        lcd.print("Check Cool Down ");
         bWriteComplete = true;
+        Mode = ModePrepareOff;
       }
     }
   }

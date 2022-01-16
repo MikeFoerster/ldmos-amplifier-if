@@ -6,7 +6,7 @@ void CalculateTimeout(byte bHours, byte bMinutes, unsigned long &ulTimeout) {
 
 
 //Update the Hours and Minutes (Used each Loop) and call Beeper if less than 10 minutes.
-void TimeUpdate(byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte &Mode) {
+boolean TimeUpdate(byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte &Mode) {
   //We should NOT get here if Mode == OFFMODE:
   unsigned long Seconds = ulTimeout - (millis() / 1000);
 
@@ -14,16 +14,13 @@ void TimeUpdate(byte &bHours, byte &bMinutes, unsigned long &ulTimeout, byte &Mo
   bHours =  Seconds / 3600;  //Ignore the remainder
   bMinutes = (Seconds - (bHours * 3600)) / 60;
 
-  //Check for Timeout: (TimeoutTime is stored in Seconds)
-  if (Seconds <= 0) {
-    //Call the Off Routine to set into Off mode.
-    OffRoutine(Mode);
-  }
-
   //Less than 10 Minutes, Sound the Beep: (Use Hours < 1 in case bHours goes negative.
-  else if ((bHours <= 0) && ((bMinutes <= 10) && bMinutes > 0)) {
+  if ((bHours <= 0) && ((bMinutes <= 10) && bMinutes > 0)) {
     TimeoutBeeper(bMinutes, Mode);
   }
+    //Check for Timeout: (TimeoutTime is stored in Seconds)
+  if (Seconds <= 0) return true;  //Return True value so we shut down the Rig and Amp
+  else return false;
 }
 
 void TimeoutBeeper(byte bMinutes, byte Mode) {

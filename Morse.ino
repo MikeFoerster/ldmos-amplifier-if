@@ -1,8 +1,10 @@
 // From: https://gist.github.com/baojie/4460468 and modified from there (added 'switch' statement).
 
+//Changes the speed of the Morse Code Error Indications.
+int tempo = 75;
+
 void SendMorse(String CharsToSend) {
   static String Stored;
-  
   if (CharsToSend == "") {
     //When string is blank, Repeat last message:
     CharsToSend = Stored;
@@ -38,7 +40,6 @@ void dash() {
 }
 
 void morse(byte letter) {           // time to transmit
-//  Serial.println(letter, DEC);
 switch (letter) {
    case 'a': {dot(); dash(); break;}
    case 'b': {dash(); dot(); dot(); dot(); break;}

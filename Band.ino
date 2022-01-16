@@ -1,44 +1,138 @@
-byte ReadBand(byte RigPortNumber) {
-  //Using Frequency:  Returns new band
-  byte CurrentBand;
 
-  //Read the Frequency from the Radio and convert to Band (byte)
-  unsigned int TargetFreq = ReadTheFrequency(RigPortNumber);
+boolean CheckBandUpdate(int &CurrentBand, byte RigPortNumber, byte &Mode, boolean AI2Mode, byte AntennaSwitch) {
+  //Returns true if the band updates.
+  //Used every so many seconds to see if the band changed.
 
-  //TRIED the "BN;" command, but reading the Frequency allows knowing when we are out of the valid Ham Bands
-  //  //Read the BAND ("BN;") from the Radio and convert to Band (byte)
-  //  unsigned int Band = ReadTheBand(RigPortNumber);  //Through RigComms
-  //  //Serial.print(F("Target Freq: ")); Serial.println(TargetFreq);
-  //  if (Band <= 10) {
-  //    CurrentBand = BandNumberToBand(Band);
+  //Store the CurrentBand:
+  int LastBand = CurrentBand;
+  boolean AntennaSet = false;
+
+  //Check for Band Update:  Takes about 340 ms:
+  CurrentBand = ReadBand(RigPortNumber, AI2Mode);  //Function just above...
+
+  //Serial.print(F("  CheckBand found CurrentBand = ")); Serial.print(BandString(CurrentBand)); Serial.print(F("  LastBand = ")); Serial.println(BandString(LastBand));
+  
+  //Problem: With slow Band Changes on K3, the AI2 modes doesn't always seem to keep up, may loose the last band change.
+  //Recheck Band if > 10 seconds since last band change:
+  //  static unsigned long LastBandChangeTime
+  //  if ((AI2Mode == true) && (CurrentBand == 254)) {
+  //    CurrentBand = RecheckBand(LastBand);
   //  }
 
-  if (TargetFreq > 0) {
-    CurrentBand = FreqToBand(TargetFreq);
+  //If there was no change, we're done here...
+  if ((AI2Mode == true) && (CurrentBand == 254)) {
+    CurrentBand = LastBand;
+    return false;
   }
-  else {
-    CurrentBand = 255; //Not a valid Frequency!!
-    //Don't SendMorse here, we may be just passing through invalid freq...
+  if (CurrentBand == LastBand) return false;
+
+  //There must have been a band change detected (Need to Verify)
+  if (CurrentBand <= i30m) {  //Only update for the Valid & Invalid Bands (Not for 255!)
+    //Verify the band change, Use the Query method to verify the change.
+    delay(100);
+    int CurrentBand2 = ReadBand(RigPortNumber, false); //Read Band, Classic Mode (send cmd)
+    if (CurrentBand == CurrentBand2) {
+
+      //Update relays to the new band
+      SetupBandOutput(CurrentBand);  //Function just below...
+
+      //Set the Power for the Rig to the Power Value stored in Eeprom for the new band setting.
+      if (UpdateBandPower(CurrentBand, RigPortNumber)) {
+        //Set for Continous beep for failed UpdateBandPower???
+        Mode = ModeError;
+      }
+
+      //Serial.print(F("  AntennaSwitch Value: ")); Serial.println(AntennaSwitch);
+      //Set the Antenna output also:
+      if (AntennaSwitch == 0) {
+        //AntennaSwitch is in AUTO mode
+        AntennaSet = SetAutoAntenna(CurrentBand);
+      }
+      return AntennaSet;
+    }
+    else {
+      //Band didn't change (verification failed)
+      CurrentBand = LastBand;
+    }
   }
+  //If we get this far, Band didn't change.
+  return false;
+}
+
+
+int ReadBand(byte RigPortNumber, boolean AI2Mode)
+{
+  //Using Frequency:  Returns new band as an integer.
+  //  Return 254 for AI2Mode for no update (No Comms from AI2 Mode!)
+  //  Returns 255 for invalid Frequency.
+
+  int CurrentBand = 0;
+  unsigned int TargetFreq = 0;
+
+  //Serial Comms Buffer Overflow (Greater than 64 bytes) in AI2 is common.  Typically happens on any Band Change.
+  //  BUT I found a way to increase the Comms Buffer so there is no longer an overflow!
+
+  //If we are in AI2 Mode:
+  if (AI2Mode)
+  {
+
+    if (RigPortNumber == 3)
+    { //ICOM Transceive Mode (Like AI2)
+      TargetFreq = processCatMessages(false);
+    }
+    else
+    { //Elecraft
+      String AI2Output = RadioAiResponse(RigPortNumber);
+      int Length = AI2Output.length();
+      if (Length > 0) {
+        //Serial.print(F(" AI2Output Length is ")); Serial.println(AI2Output.length());
+        //Serial.print(F(" AI2 Output: ")); Serial.println(AI2Output);
+
+        //See Comments about BUFFER OVERRUN on Main File!!!   LEAVE THIS HERE.  PC SPECIFIC MODIFICATION to increase the TX buffer from 64 to 256 bytes.
+        if ((Length > 62) && (Length < 65)) {
+          Serial.println(F("Check for Buffer OverRun"));
+
+        }
+        TargetFreq = ReadFrequencyFromFA(AI2Output);
+      }
+    }
+
+
+    if (TargetFreq > 0)
+    {
+      CurrentBand = FreqToBand(TargetFreq);
+      Serial.print(F("Found TargetFreq = ")); Serial.print(TargetFreq);  Serial.print(F("  CurrentBand updated to: ")); Serial.println(CurrentBand);
+      if (CurrentBand == 255)  //If the FreqToBand Fails, try the ReadTheFrequency manually!
+      {
+        delay(50);
+        //Serial.print(F("     AI2 Freq Read Failed on Band Change, Retrying: ")); Serial.println(CurrentBand);
+        TargetFreq = ReadTheFrequency(RigPortNumber);
+        if (TargetFreq > 0)
+        {
+          CurrentBand = FreqToBand(TargetFreq);
+        }
+      }
+    }
+    else
+    {
+      return 254;  //No Change
+    }
+  }
+  else
+  { //Else Standard Query Mode:
+    //Read the Frequency from the Radio and convert to Band (byte)
+    TargetFreq = ReadTheFrequency(RigPortNumber);
+
+    if (TargetFreq > 0)
+    {
+      CurrentBand = FreqToBand(TargetFreq);
+      //Serial.print(F("  ReadBand (Manual Mode) found TargetFreq =")); Serial.print(TargetFreq); Serial.print(F("  and CurrentBand: ")); Serial.println(CurrentBand);
+    }
+  }
+
   return CurrentBand;
 }
 
-//int BandNumberToBand(byte BandNumber) {
-//  switch (BandNumber) {
-//    case 0: { return i160m; break; }
-//    case 1: { return i80m; break; }
-//    case 2: { return i60m; break; }
-//    case 3: { return i40m; break; }
-//    case 4: { return i60m; break; }
-//    case 5: { return i20m; break; }
-//    case 6: { return i17m; break; }
-//    case 7: { return i15m; break; }
-//    case 8: { return i12m; break; }
-//    case 9: { return i10m; break; }
-//    case 10: { return i6m; break; }
-//    default: { return 255; break;}
-//  }
-//}
 
 byte FreqToBand(unsigned int TargetFreq) {
   //Returns Band (as a byte variable)
@@ -57,43 +151,15 @@ byte FreqToBand(unsigned int TargetFreq) {
   else return 255;
 }
 
-bool CheckBandUpdate(int &CurrentBand, byte RigPortNumber, byte &Mode) {
-  //Returns true if the band updates.
-  //Used every so many seconds to see if the band changed.
 
-  //Store the CurrentBand:
-  int LastBand = CurrentBand;
 
-  //Check for Band Update:  Takes about 340 ms:
-  CurrentBand = ReadBand(RigPortNumber);  //Function just above...
-
-  //If there was no change, we're done here...
-  if (CurrentBand == LastBand) return false;
-
-  //There must have been a band change detected (Need to Verify)
-  if (CurrentBand <= i30m) {  //Only update for the Valid & Invalid Bands (Not for 255!)
-    //Verify the band change:
-    delay(100);
-    byte CurrentBand2 = ReadBand(RigPortNumber);
-    if (CurrentBand == CurrentBand2) {
-      //Update relays to the new band
-      SetupBandOutput(CurrentBand);  //Function just below...
-
-      //Set the Power for the Rig to the Power Value stored in Eeprom for the new band setting.
-      if (UpdateBandPower(CurrentBand, RigPortNumber)) {
-        //Set for Continous beep for failed UpdateBandPower???
-        Mode = ModeError;
-      }
-      return true;
-    }
-  }
-  //If we get this far, Band didn't change.
-  return false;
-}
-
-bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
+boolean UpdateBandPower(int CurrentBand, byte RigPortNumber) {
   //Returns true if it fails.
   //Used from the Buttons functions to update the Power Setting for each individual band.
+
+  byte ErrorCount = 0;
+  boolean Response;
+
   //The byte that each band is represented by, is also the Eeprom address where the power value is stored.
   // i.e: i160m = 0, i80m = 2, i40m = 4, etc...
   int PowerValue = EEPROMReadInt(CurrentBand);
@@ -111,21 +177,56 @@ bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
     }
   }
 
+
   //Set the Power to the Rig using the "PCxxx" command.
-  bool Response = SetPower(PowerValue, RigPortNumber);
+  do {
+    delay(100);
+    Response = SetPower(PowerValue, RigPortNumber);
+    //Serial.print(F(" SetPower Response returned: ")); Serial.println(Response);
+    if (Response) {
+      ErrorCount++;
+      Serial.print(F(" PowerValue Error: ")); Serial.println(ErrorCount);
+    }
+  } while ((Response == true) && (ErrorCount < 5));
+  //Failed 5 times!!!
   if (Response) {
     //Command Failed...
     SendMorse("Pwr Err");
     return Response;
   }
 
-  //Set the Tune Power using the "MPxxx" command.
-  Response =  SetTunePower(PowerValue, RigPortNumber);
-  if (Response) {
-    //SetTunePower Failed
-    SendMorse("Tune Err");
-    return Response;
+  if (RigPortNumber != 3)  //Can't set Tune Power on the IC-705.
+  {
+    ErrorCount = 0; //Reset ErrorCount
+
+    //Set the Tune Power to 1 WATT using the "MPxxx" command.
+    do {
+      delay(100);
+      Response = SetTunePower(1, RigPortNumber);
+      if (Response) {
+        //Command Failed...
+        ErrorCount++;
+        //Serial.print(F(" TuneValue Error: ")); Serial.println(ErrorCount);
+      }
+    } while ((Response == true) && (ErrorCount < 5));
+    //Failed 5 times!!!
+    if (Response) {
+      //Command Failed...
+      SendMorse("Tune Err");
+      return Response;
+    }
   }
+
+  //  delay(100);
+  //  //Recheck the Band Power Setting (Found that Power was at 10W, and should NOT have been, this is a safety Recheck!!!)
+  //  if (ReadThePower(RigPortNumber) != PowerValue) {
+  //    boolean Response = SetPower(PowerValue, RigPortNumber);
+  //    if (Response) {
+  //      //Command Failed...
+  //      SendMorse("Pwr Err");
+  //      return Response;
+  //    }
+  //  }
 
   //Check the Eeprom setting, set to Operate or Bypass
   Bypass(EEPROMReadInt(iBypassModeEeprom)); //Set to Operate(1) or Bypass (0) Mode
@@ -134,7 +235,7 @@ bool UpdateBandPower(byte CurrentBand, byte RigPortNumber) {
 }
 
 
-void SetupBandOutput(byte CurrentBand) {
+void SetupBandOutput(int CurrentBand) {
   //Turn off all Band Outputs (There are only 5, 160m is all others off.)
   digitalWrite(i80mBandPin, OFF);
   digitalWrite(i40mBandPin, OFF);
@@ -212,8 +313,7 @@ int BumpPowerSetting(byte ReadIncDec, int CurrentBand) {
 
   //Check Up/Down for Max/Min range or Inc/Dec PowerSetting
   if (ReadIncDec == 2) { //Increment
-    //For Increment, get Maximum Power setting for this band.
-    int MaxPower = GetMaxPower(CurrentBand);
+
     //Verify that the new setting is NOT already Maximum value
     if (PowerSetting == GetMaxPower(CurrentBand)) {
       //Error Message
@@ -270,3 +370,4 @@ int GetMaxPower(int CurrentBand) {
     default:    return  0; break; //Invalid Band.
   }
 }
+

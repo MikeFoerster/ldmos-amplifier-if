@@ -15,10 +15,12 @@
 // Wait for Clear  (Must wait for the temp to drop to below error value)
 
 
-void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, float Volts, bool Act_Byp, double AmpTemp, byte bHours, byte bMinutes, String ErrorString) {
+void UpdateDisplay(byte Mode, int CurrentBand, int Fwd, int Ref, float SWR, float Volts, boolean Act_Byp, double AmpTemp, byte bHours, byte bMinutes, byte AntennaSwitch, String ErrorString) {
   String Line1 = "";
   String Line2 = "";
   static byte count;
+  //static byte X;
+  static byte Y;
 
   if (Mode >= ModeSwrError) {
     //For Modes other than Off & PowerUp, Get the BandString to start Line1.
@@ -43,30 +45,111 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
         break;
       }
 
+    case ModeCoolDown: {
+        Line1 = "CoolDown Mode";
+        //Read the amplifier temp. (It's no longer updated from the Main Loop.)
+        double dAmpTemp = ReadAmpTemp();
+        Line2 = "Tmp:" + String(int(dAmpTemp)) + " Fan:";
+        //Use the global FanOutput to calculate the FanPercentage.
+        int FanPercent =  map(FanOutput, 0, 255, 0, 99);
+        //If Fan is running, then Print out the Fan Power Percentage.
+        Line2 = Line2 + " " + String(FanPercent) + "%";
+        break;
+      }
+
     case ModeError: {
+        static boolean Toggle;
+        static unsigned long DisplayTime;
         Line1 = Line1 + "Error Mode ";
 
         count ++;
         if (count < 10) {
-        Line2 = ErrorString;
+          Line2 = ErrorString;
         }
         else if (count < 20) {
-          Line2 = F("Select to Retry ");
+          if (Toggle) {
+            Line2 = F("Left Manual Mode");
+            if ((millis() - DisplayTime) > 2000) {
+              Toggle = false;
+              DisplayTime = millis();
+            }
+          }
+          else {
+            Line2 = F("Select to Retry ");
+            delay(500);
+            if ((millis() - DisplayTime) > 2000) {
+              Toggle = true;
+              DisplayTime = millis();
+            }
+          }
         }
         else count = 0; //Reset the count.
         break;
       }
 
     case ModeReceive: {
-        Line1 = Line1 + "Receive";
+        //Normal Temp, use "Receive ", OverTemp use "AmpTemp ".
+        if (AmpTemp < 108) Line1 = Line1 + "Receive ";
+        else Line1 = Line1 + "AmpTemp ";
+
         //If the Amp is in Bypass, indicate by adding the "Byp" to the end of the string.
         if (Act_Byp == false) {
           Line1 = Line1 + " Byp";
         }
-        
+        else {
+          //Use the global FanOutput to calculate the FanPercentage.
+          int FanPercent =  map(FanOutput, 0, 255, 0, 99);
+          //If Fan is running, then Print out the Fan Power Percentage to the Receive Top lne.
+          if (FanPercent > 0) {
+            if (FanPercent < 10) Line1 = Line1 + " " + String(FanPercent) + "%";
+            else Line1 = Line1 + String(FanPercent) + "%";
+          }
+        }
+
         //Line 2, Build the normal Recieve String:  Volts, AmpTemp, TimeRemaining... (char(223) is the Degree symbol)
-        Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
-        if (bMinutes < 10) {   
+        if (AmpTemp < 100) {
+          Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+        }
+        else {
+          //Keep the Minutes digits from dropping off when temp > 100:
+          Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+        }                         // ^ removed a space
+        if (bMinutes < 10) {
+          Line2 += ":0" + String(int(bMinutes));
+        }
+        else {
+          Line2 += ":" + String(int(bMinutes));
+        }
+        break;
+      }
+
+    case ModeManual: {
+        //Normal Temp, use "Receive ", OverTemp use "AmpTemp ".
+        if (AmpTemp < 108) Line1 = Line1 + "Receive ";
+        else Line1 = Line1 + "AmpTemp ";
+
+        //If the Amp is in Bypass, indicate by adding the "Byp" to the end of the string.
+        if (Act_Byp == false) {
+          Line1 = Line1 + " Byp";
+        }
+        else {
+          //Use the global FanOutput to calculate the FanPercentage.
+          int FanPercent =  map(FanOutput, 0, 255, 0, 99);
+          //If Fan is running, then Print out the Fan Power Percentage to the Receive Top lne.
+          if (FanPercent > 0) {
+            if (FanPercent < 10) Line1 = Line1 + " " + String(FanPercent) + "%";
+            else Line1 = Line1 + String(FanPercent) + "%";
+          }
+        }
+        //Line 2, Build the normal Recieve String:  Volts, AmpTemp, TimeRemaining... (char(223) is the Degree symbol)
+        if (AmpTemp < 100) {
+          Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+        }
+        else {
+          //Keep the Minutes digits from dropping off when temp > 100:
+          Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+        }                         // ^ removed a space
+        if (bMinutes < 10) {
           Line2 += ":0" + String(int(bMinutes));
         }
         else {
@@ -86,7 +169,19 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
         else if (Ref < 100) RZeros = " ";
 
         Line1 = Line1 + "TR SWR: " + String(SWR);
-        Line2 =  String(Volts) + " F" + FZeros + String(Fwd) + " R" + RZeros + String(Ref);
+        if (AmpTemp < 110) {
+          Line2 =  String(Volts) + " F" + FZeros + String(Fwd) + " R" + RZeros + String(Ref);
+        }
+        else {
+          Y < 10 ? Y += 1 : Y = 0;
+          //Alternate between Voltage and "Temp"
+          if (Y < 5) {
+            Line2 =  String(Volts) + " F" + FZeros + String(Fwd) + " R" + RZeros + String(Ref);
+          }
+          else {
+            Line2 =  "Hi Temp" + FZeros + String(Fwd) + " R" + RZeros + String(Ref);
+          }
+        }
         break;
       }
 
@@ -116,6 +211,24 @@ void UpdateDisplay(byte Mode, byte CurrentBand, int Fwd, int Ref, float SWR, flo
         else Line2 = "ChngMode=Operate";
         break;
       }
+    case ModeSetupAi2Mode: {
+        int AiMode = EEPROMReadInt(iAI2Mode);
+        Line1 = Line1 + "Set AI2 Mode";
+        Line2 = "Value: " + String(AiMode) + "  Up/Dn ";
+        break;
+      }
+    case ModeSetupManualBand: {
+        Line1 = Line1 + "Set Manual Band ";
+        Line2 = "Value: " + String(CurrentBand) + "  Up/Dn ";
+        break;
+      }
+    case ModeSetupAntenna: {
+        Line1 = Line1 + "Set Antenna ";
+        //We displaly the current Antenna Switch Position, 0=Auto, 1=160M, 2=80M, etc...
+        Line2 = (ManualAntennaString(AntennaSwitch)) + "  Up/Dn ";
+        break;
+      }
+
       //default:
   }  //End of switch(Mode)
 
