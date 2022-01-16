@@ -112,7 +112,7 @@
 //     **Found that the AI2 Mode required MORE THAN the stock 64 bytes of Buffer in the Serial Comms.
 //         My solution was to Modify the C:\Program Files (x86)\Arduino\hardware\arduino\avr\cores\arduino\HardwareSerial.h file to increase the size:
 //             #define SERIAL_TX_BUFFER_SIZE 64   to #define SERIAL_TX_BUFFER_SIZE 256.
-//               IMPORTANT: 
+//               IMPORTANT:
 //         Without this fix, when the Band is changed, it can sometimes NOT change to the correct setting!!!
 //           https://www.galaxysofts.com/new/increasing-length-serial-buffer-arduino/   (MAY BE OLD!!!)
 //         WARNING: This article talks about changing the HardwareSerial.CPP file, but I in fact changed the HardwareSerial.h file,
@@ -128,7 +128,7 @@
 //     Adding File IcomComs
 //4.5  Skipping over the Icom Comms and putting in a Manual Mode to run the IC-705 temporarily.
 //       Turns out that USB may be somewhat difficult, after discussion with Glen Popiel.
-//     Manual Mode allows operating with a rig that the Arduino can't communicate with.  
+//     Manual Mode allows operating with a rig that the Arduino can't communicate with.
 //       Adds a Setting to allow manually changing the Band, but keeps all the other functionality (Fan support, Remote Display, etc.)
 //5.1  Adding in CI_V Code for the IC=705.
 //       Read Frequency (in Transceive Mode, similar to AI2 mode for Elecraft).
@@ -176,7 +176,7 @@
 // FC: Fan Control      ^FCn; n=fan minimum speed, range of 0 (off) to 6 (high).
 // PJ: Power Adjustment  ^PJnnn;  nnn=power adjustment setting range of 80 to 120  Poewr adjustment value is saved on a per-band basis for current band.  Response is for current band.
 
-const String sVersion = "5.2";
+const String sVersion = "5.4";
 #define  VERSION_ID "LDMOS 12/21 " + sVersion
 
 
@@ -283,8 +283,8 @@ void setup() {
   // Monitor Comm Port Setup Baud Rate
   Serial.begin(115200);
 
-    //CLEAR ALL THE Antenna Relay OUTPUTS FIRST so that when we assign them they don't chatter.
-  digitalWrite(b160, OFF); 
+  //CLEAR ALL THE Antenna Relay OUTPUTS FIRST so that when we assign them they don't chatter.
+  digitalWrite(b160, OFF);
   digitalWrite(b80, OFF);
   digitalWrite(b60, OFF);
   digitalWrite(b40, OFF);
@@ -292,7 +292,7 @@ void setup() {
   digitalWrite(b6m, OFF);
   digitalWrite(bVHF, OFF);
 
-//Setup the Antenna Band Output Pins:
+  //Setup the Antenna Band Output Pins:
   pinMode(b160, OUTPUT);
   pinMode(b80, OUTPUT);
   pinMode(b60, OUTPUT);
@@ -300,7 +300,7 @@ void setup() {
   pinMode(bBeam, OUTPUT);
   pinMode(b6m, OUTPUT);
   pinMode(bVHF, OUTPUT);
-  
+
   // set up the LCD's number of columns and rows:
   lcd.begin(16, 2);
 
@@ -392,7 +392,7 @@ void loop() {
   static boolean AmpGT110;    //Amp Temp GreaterThan 110 Deg F for CW Alarm.
   static boolean AI2Mode;  // false = Query Mode (Original), true = AI2 Mode.
   static boolean Cleared;  //Used to clear the variables in the ModeOff case.
-    static byte AntennaSwitch; //AntennaSwitch==0, Auto Mode, or use CurrentBand values for Manual
+  static byte AntennaSwitch; //AntennaSwitch==0, Auto Mode, or use CurrentBand values for Manual
 
   //Used for Startup Only:
   if (Mode == 0) Mode = ModeOff;
@@ -434,7 +434,8 @@ void loop() {
 
     if (Mode != ModeManual) {  //Don't check the Current Band when ModeManual!!!!!
       //Check the Band every few seconds (FA; Cmd Mode), or Every Loop for AI2Mode:
-      if (((millis() - ulCommTime) > 2000) || ((AI2Mode) && (Mode == ModeReceive)))  {
+      if ((((millis() - ulCommTime) > 5000) && (Mode == ModeReceive)) || (AI2Mode))  {
+        //if (((millis() - ulCommTime) > 2000) &&  (Mode == ModeReceive))  {
         //Check and update the Band.
         if (Mode != ModeSetupBandPower) { //Don't Update for ModeSetupBandPower, it can change bands using the Left/Right buttons.
           //Serial.println(F(" CheckBandUpdate..."));

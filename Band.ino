@@ -11,7 +11,7 @@ boolean CheckBandUpdate(int &CurrentBand, byte RigPortNumber, byte &Mode, boolea
   CurrentBand = ReadBand(RigPortNumber, AI2Mode);  //Function just above...
 
   //Serial.print(F("  CheckBand found CurrentBand = ")); Serial.print(BandString(CurrentBand)); Serial.print(F("  LastBand = ")); Serial.println(BandString(LastBand));
-  
+
   //Problem: With slow Band Changes on K3, the AI2 modes doesn't always seem to keep up, may loose the last band change.
   //Recheck Band if > 10 seconds since last band change:
   //  static unsigned long LastBandChangeTime
@@ -34,7 +34,7 @@ boolean CheckBandUpdate(int &CurrentBand, byte RigPortNumber, byte &Mode, boolea
     if (CurrentBand == CurrentBand2) {
 
       //Update relays to the new band
-      SetupBandOutput(CurrentBand);  //Function just below...
+      SetupAmpBandOutput(CurrentBand);  //Function just below...
 
       //Set the Power for the Rig to the Power Value stored in Eeprom for the new band setting.
       if (UpdateBandPower(CurrentBand, RigPortNumber)) {
@@ -127,10 +127,10 @@ int ReadBand(byte RigPortNumber, boolean AI2Mode)
     {
       CurrentBand = FreqToBand(TargetFreq);
       //Serial.print(F("  ReadBand (Manual Mode) found TargetFreq =")); Serial.print(TargetFreq); Serial.print(F("  and CurrentBand: ")); Serial.println(CurrentBand);
+      return CurrentBand;
     }
   }
-
-  return CurrentBand;
+  return 255;
 }
 
 
@@ -235,7 +235,7 @@ boolean UpdateBandPower(int CurrentBand, byte RigPortNumber) {
 }
 
 
-void SetupBandOutput(int CurrentBand) {
+void SetupAmpBandOutput(int CurrentBand) {
   //Turn off all Band Outputs (There are only 5, 160m is all others off.)
   digitalWrite(i80mBandPin, OFF);
   digitalWrite(i40mBandPin, OFF);

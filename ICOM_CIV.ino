@@ -78,19 +78,26 @@ uint32_t processCatMessages(boolean WaitCmd) {
   //Returns the data Read from: Frequency,
 
   uint8_t read_buffer[12];   //Read buffer
-  byte Count = 0;
+  int Count = 0;
+  static int Average;
+  static int AverageCount;
+  //static unsigned long Total;
 
   //A SPECIFIC command was sent, wait for the response!
   if (WaitCmd) {
     unsigned long StartWait = millis();
     do {
-      delay(5);
+      delay(10);
       Count++;
-    } while ((Serial3.available() == 0) && (Count < 50)); //Count limited to 255
+    } while ((Serial3.available() == 0) && (Count < 250)); //Count limited to 255
 
     //Serial.print(F(" processCatMessages Count = ")); Serial.print(Count); Serial.print(F(" Out of 200."));
-    Serial.print(F("   Wait Time = ")); Serial.println(millis() - StartWait);
+    Serial.print(F("      Wait Time = ")); Serial.println(millis() - StartWait);
     if (Serial3.available() == 0) return 0;
+    AverageCount ++;
+    Average -= Average / AverageCount;
+    Average += (millis() - StartWait) / AverageCount;
+    Serial.print(F("         Average=")); Serial.print(Average); Serial.print(F("  for Count:")); Serial.println(AverageCount);
   }
 
   while (Serial3.available()) {
@@ -170,21 +177,21 @@ uint8_t readLine(uint8_t buffer[], uint8_t ArraySize) {
   uint8_t counter = 0;
 
   while (Serial3.available()) {
-
     NextByte = Serial3.read(); // Read 1 byte at a time.
+    //delay(5);
     buffer[counter++] = NextByte;
     if (STOP_BYTE == NextByte) break;
     if (counter >= ArraySize) return 0;
   }
   //Temporarily, print out ALL lines that are received.
-  //  Serial.print("               ####### readLine Data<");
-  //  for (uint8_t i = 0; i < counter; i++) {
-  //    if (buffer[i] < 16)Serial.print("0");
-  //    Serial.print(buffer[i], HEX);
-  //    Serial.print(" ");
-  //    if (buffer[i] == STOP_BYTE)break;
-  //  }
-  //  Serial.println(">");
+  Serial.print("        ## readLine Data<");
+  for (uint8_t i = 0; i < counter; i++) {
+    if (buffer[i] < 16)Serial.print("0");
+    Serial.print(buffer[i], HEX);
+    Serial.print(" ");
+    if (buffer[i] == STOP_BYTE)break;
+  }
+  Serial.println(">");
 
   return counter;
 }
@@ -214,12 +221,14 @@ uint8_t bcd2dec(uint8_t n) { // takes 1384 usec for 1000 calls
 void CivSendCmd(uint8_t buffer[], uint8_t ArraySize) {
   //This functiobn is used to SEND the commands (from the 'buffer[]' to the CIV port
   //Serial.print(F("  SEND CMD: <"));
+  Serial3.flush();
   for (uint8_t i = 0; i < ArraySize; i++) {
     Serial3.write(buffer[i]);
     //Serial.print(buffer[i], HEX); Serial.print(" ");
   }
   //Serial.println(F("> SEND Command Complete"));
 }
+
 
 boolean WaitOkMsg(void) {
   //If a command was send that does NOT expect specific data return, then we wait for the OK Message (FB) return data.
@@ -229,15 +238,15 @@ boolean WaitOkMsg(void) {
   Return = processCatMessages(true);
 
   if (Return == 255) {
-    //Serial.println(F(" GOT RETURN OF 255 After Command"));
+    Serial.println(F("    GOT RETURN OF 255 After Command"));
     return false;
   }
   else if (Return == 254) {
-    Serial.println(F(" ERROR, NG CODE OF 254 (NacMsg) After Command"));
+    Serial.println(F("      ERROR, NG CODE OF 254 (NacMsg) After Command"));
     return true;
   }
   else {
-    Serial.println(F(" ERROR, NO RETURN of OK Message After Command"));
+    Serial.println(F("      ERROR, NO RETURN of OK Message After Command"));
     return true;
   }
 }
@@ -258,20 +267,26 @@ byte ICOM_Rig_Model(void) {
 uint32_t CIV_Read_Frequency(void) {
   //Don't Read the message, it will be picked up by the normal processCatMessages() loop...
   //  No Sub Cmd's required:
+  static int ErrorCount;
 
   byte ReadFreq[] = {START_BYTE, START_BYTE, RADIO_ADDRESS, CONTROLLER_ADDRESS, CMD_READ_FREQ, STOP_BYTE};
   uint32_t ReturnFreq = 0;
   byte Count = 0;
 
-  do
-  {
-    CivSendCmd(ReadFreq, sizeof(ReadFreq));
-    Count == 0? delay(0) : delay(100);
-    ReturnFreq = processCatMessages(true);
-    //Serial.print(F(" CIV_Read_Frequency read: ")); Serial.print(ReturnFreq); Serial.print(F(" Count = ")); Serial.println(Count);
-    Count++;
-  } while ((ReturnFreq < 1000) && (Count < 3));  //Expect the Frequency to be > 1.0 MHz.
-  Serial.print(F(" CIV_Read_Frequency read: ")); Serial.println(ReturnFreq);
+  //do
+  //{
+  CivSendCmd(ReadFreq, sizeof(ReadFreq));
+  //Count == 0 ? delay(0) :
+  delay(100);
+  ReturnFreq = processCatMessages(true);
+  //Serial.print(F("      CIV_Read_Frequency read: ")); Serial.print(ReturnFreq); Serial.print(F(" Count = ")); Serial.println(Count);
+  //Count++;
+  //} while ((ReturnFreq < 256) && (Count < 5));  //Expect the Frequency to be > 1.0 MHz.
+  if (ReturnFreq < 256) {
+    ErrorCount++;
+    Serial.print(F("ERR"));
+  }
+  Serial.print(F("      CIV_Read_Frequency read: ")); Serial.print(ReturnFreq); Serial.print(F("  ErrorCount:")); Serial.println(ErrorCount);
   return   ReturnFreq;
 }
 
@@ -297,13 +312,13 @@ boolean CIV_Transceive_On_Off(boolean On_Off) {
 
   uint8_t WriteTransceive[] = {START_BYTE, START_BYTE, RADIO_ADDRESS, CONTROLLER_ADDRESS, 0x1A, 0x05, 0x01, 0x31, CMD, STOP_BYTE};
 
-  do {
-    CivSendCmd(WriteTransceive, sizeof(WriteTransceive));
-    Return = WaitOkMsg();
-    Count++;
-  } while ((Return) && (Count < 3));  //Keep running until the function passes.
+  // do {
+  CivSendCmd(WriteTransceive, sizeof(WriteTransceive));
+  Return = WaitOkMsg();
+  //    Count++;
+  //  } while ((Return) && (Count < 3));  //Keep running until the function passes.
 
-  //Serial.print(F("Read Transceive State returned: ")); Serial.println(Return);
+  Serial.print(F("      Read Transceive State returned: ")); Serial.println(Return);
   return Return;
 }
 
@@ -386,14 +401,16 @@ boolean CIV_SetPower(uint32_t Watts) {
 
   //For the RF Power, need to add the Sub Cmd: 0x0A
   uint8_t RfPower[] = {START_BYTE, START_BYTE, RADIO_ADDRESS, CONTROLLER_ADDRESS, CMD_RF_Power, 0x0A, MSB, LSB, STOP_BYTE};
-  boolean Wait;
-  do {
-    //Serial.print(F("  Setting Power to: ")); Serial.print(MSB, HEX); Serial.print(" "); Serial.println(LSB, HEX);
-    //First Time, clear the Buffer, NOT after that!
-    CivSendCmd(RfPower, sizeof(RfPower));
-    Wait = WaitOkMsg();
-    Count++;
-  } while ((Wait) && (Count <= 5));
+  boolean Wait = false;
+  //do {
+  //Serial.print(F("  Setting Power to: ")); Serial.print(MSB, HEX); Serial.print(" "); Serial.println(LSB, HEX);
+  //First Time, clear the Buffer, NOT after that!
+  CivSendCmd(RfPower, sizeof(RfPower));
+  Wait = WaitOkMsg();
+  //   delay(20);
+  //   Count++;
+  //   } while ((Wait) && (Count <= 5));
+  //} while (Count <= 3);
   return Wait;
 }
 

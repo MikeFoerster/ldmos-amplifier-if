@@ -8,7 +8,7 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
   //Returns 2 = Failed to Disable K2 Internal Amp
   //Returns 3 = Power Up, NO 50v detected
   //Returns 4 = Invalid Band (could be outside the Ham Bands)
-  //Returns 5 = SetupBandOutput failed.
+  //Returns 5 = SetupAmpBandOutput failed.
   String ErrorString = "";
 
   String RigName = "";
@@ -104,14 +104,18 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
     //IC-705 has Transceive Mode (similar to AI Mode on Elecraft)
     //For the IC-705, it currently works MUCH better with the AI2 Off.
 
+    //Try closing the other two Serial Ports:
+    Serial1.end();
+    Serial2.end();
+    
     RigPortNumber = 3;  //Set the PortNumber to 3.
-    Serial.println(F("    Detected ICOM on Port 3."));
+    Serial.println(F("Detected ICOM on Port 3."));
 
     //Make sure the Transceive mode (AI2) is OFF.
     SetAiOnOff(0, RigPortNumber);
     //Turn off the programmed AI2Mode:
     AI2Mode = false;
-    //Update the AI2 Mode in memory:
+    //Update the AI2 Mode in Eeprom memory:
     AI2Mode = EEPROMReadInt(iAI2Mode);
 
     //    if (SetAiOnOff(2, RigPortNumber)) {
@@ -127,7 +131,7 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
 
   //Get the Current Band setting using the Query mode (Ignore AI2Mode!)
   CurrentBand = ReadBand(RigPortNumber, false);
-  Serial.print(F("ReadBand in PowerOn returned: ")); Serial.println(CurrentBand);
+  Serial.print(F("CurrentBand in PowerOn() returned: ")); Serial.println(CurrentBand);
 
   if (CurrentBand > i6m) {
     //Invalid Amplifier Band: 60m, 30m, or could be somewhere outside the bands
@@ -169,7 +173,7 @@ String PowerUpRoutine(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber,  
   }
 
   //Setup the Band Relays:
-  SetupBandOutput(CurrentBand);
+  SetupAmpBandOutput(CurrentBand);
   //Set the Power Output for the band.
   if (UpdateBandPower(CurrentBand, RigPortNumber)) {
     //Set for continouse beep for failed UpdateBandPower???
@@ -197,7 +201,7 @@ void AmpOffRoutine(byte &Mode) {
   delay(500);
 
   //Set to i160m, will turn off all relays.
-  SetupBandOutput(i160m);
+  SetupAmpBandOutput(i160m);
 
   //Set Bypass output to off.
   Bypass(0);

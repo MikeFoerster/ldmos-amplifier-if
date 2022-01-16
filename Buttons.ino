@@ -126,13 +126,6 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
 
         case ModeSetupAi2Mode: {
             //Select Key, we are in ModeSetupAi2Mode, change to ModeSetupAntenna.
-
-            //First, Change the AI Mode according to the User Request:
-            if (EEPROMReadInt(iAI2Mode)) SetAiOnOff(2, RigPortNumber);
-            else  SetAiOnOff(0, RigPortNumber);
-            //Update the AI2 Mode:
-            AI2Mode = EEPROMReadInt(iAI2Mode);
-
             //Change Modes:
             Mode = ModeSetupAntenna;
             break;
@@ -209,6 +202,8 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
           }
         case ModeSetupAi2Mode: {
             EEPROMWriteInt(iAI2Mode, 1);
+            AI2Mode = EEPROMReadInt(iAI2Mode);
+
             break;
           }
         case ModeSetupAntenna: {
@@ -219,7 +214,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             if (CurrentBand < 32)  CurrentBand = CurrentBand + 2;
             else CurrentBand = 0;
             //Update relays to the new band
-            SetupBandOutput(CurrentBand);
+            SetupAmpBandOutput(CurrentBand);
             break;
           }
       }
@@ -257,6 +252,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
           }
         case ModeSetupAi2Mode: {
             EEPROMWriteInt(iAI2Mode, 0);
+            AI2Mode = EEPROMReadInt(iAI2Mode);
             break;
           }
         case ModeSetupAntenna: {
@@ -267,7 +263,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             if (CurrentBand > 0)  CurrentBand = CurrentBand - 2;
             else CurrentBand = 32;
             //Update relays to the new band
-            SetupBandOutput(CurrentBand);
+            SetupAmpBandOutput(CurrentBand);
             break;
           }
       }
@@ -318,7 +314,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
 
             //We are in Manual Mode, Read the LAST Manual Band from Eeprom and Update the Band relays:
             CurrentBand = EEPROMReadInt(iManBand);
-            SetupBandOutput(CurrentBand);
+            SetupAmpBandOutput(CurrentBand);
 
             //RESET the Timeout:
             bHours = EEPROMReadInt(iHoursEeprom);

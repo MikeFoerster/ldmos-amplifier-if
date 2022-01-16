@@ -168,17 +168,10 @@ unsigned int ReadTheFrequency(byte RigPortNumber) {
   unsigned int iFreq;
 
   if (RigPortNumber == 3) {
-    //Once:
+    Serial.println(F("    #### REQUEST ReadTheFrequency"));
     iFreq = CIV_Read_Frequency();
+    Serial.println(F("    #### COMPLETE ReadTheFrequency"));Serial.println();
 
-    //Retries:
-    //    do {
-    //      iFreq = CIV_Read_Frequency();
-    //      count -= 1;
-    //      delay(25);
-    //    } while ((Frequency == "") && (count > 0));
-    //
-    //    if (iFreq == 0) return 255;
 
     //Return the frequency as an int:
     return iFreq;
@@ -199,15 +192,6 @@ unsigned int ReadTheFrequency(byte RigPortNumber) {
   }
 }
 
-//int ReadTheBand(byte RigPortNumber) {
-//  String Band = RadioCommandResponse("BN;", RigPortNumber);
-//  //Serial.print(F("  Band Read as: ")); Serial.println(Band);
-//  if (Band == "") return 255;
-//  //Convert the Band string to an Integer:
-//  int BandNumber = Band.substring(2).toInt();
-//  //Serial.print(F("  Band Number Read as: ")); Serial.println(BandNumber);
-//  return BandNumber;
-//}
 
 //Currently Not Used...
 unsigned int ReadThePower(byte RigPortNumber) {
@@ -270,15 +254,19 @@ boolean SetPower(byte PowerValue, byte RigPortNumber) {
   //Serial.println(F(" SetPower ##### "));
   if (RigPortNumber == 3)
   {
-    Serial.println(F(" SetPower"));
+    Serial.print(F("    #### REQUEST SetPower: ")); Serial.println(PowerValue);
     if (CIV_SetPower(PowerValue) == false)
     {
+      Serial.println(F("    #### COMPLETE (Passed)  SetPower")); Serial.println();
       return false;
     }
-    else return true;
+    else {
+      Serial.println(F("    #### COMPLETE (Failed) SetPower")); Serial.println();
+      return true;
+    }
   }
-  else 
-  {  //Elecraft:
+  else
+  { //Elecraft:
     if (PowerValue < 10) {
       Command = "PC00" + String(PowerValue) + ";";
     }
@@ -313,8 +301,10 @@ boolean SetAiOnOff(byte ZeroOr2, byte RigPortNumber) {
 
   //For the IC-705
   if (RigPortNumber == 3) {
+    Serial.println(F("    #### REQUEST CIV_Transceive_On_Off"));
     if (ZeroOr2 == 0) CIV_Transceive_On_Off(0);
     else CIV_Transceive_On_Off(1);
+    Serial.println(F("    #### COMPLETE CIV_Transceive_On_Off")); Serial.println();
     return false;
   }
   else {  //Elecraft:
