@@ -236,3 +236,35 @@ void UpdateAmpFan(double AmpTemp) {
     LastRun = millis();
   }
 }
+
+void ToggleIdTimer(boolean Toggle) {
+  // Toggles the ID Timer On and Off (used from the Buttons file.)
+  if (Toggle) {
+    bID_Timer = true;
+    lID_Time = millis() + 600000;  //Add 10 minutes to the current millis() time.
+    Check_ID_Timer();
+  }
+  else {
+    bID_Timer = false;
+    lID_Time = 4294967295; //Max Value
+    bID_Min_Remaining = 0;
+  }
+}
+
+void Check_ID_Timer() {
+  //  bID_Timer is true, so we either Set it or Check it.
+  if (millis() > lID_Time) {
+    //10 minutes has passed.  Generate a CW "ID" characters.
+    SendMorse("ID");
+    //Reset the timer for the next 10 minutes
+    lID_Time = millis() + 600000;    //Add 10 minutes to the current millis() time.
+  }
+  else {
+    //Calculate the time remaining for the Display Printout.  Counts 9,8,7...2,1,0:  Add 1 so we show 10,9,8...2,1-ID
+    unsigned long ulTmp = (lID_Time - millis()) / 60000;
+    bID_Min_Remaining = byte(ulTmp) + 1;
+    //bID_Min_Remaining = byte(ulTmp);
+    //Serial.print(F("Check_ID_Timer for bID_Min_Remaining = ")); Serial.print(bID_Min_Remaining);
+  }
+}
+

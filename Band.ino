@@ -175,7 +175,8 @@ boolean ReadBand(int &CurrentBand, byte RigPortNumber, boolean AI2Mode, boolean 
       return false;
     }
   }
-  Serial.println(F("  Why the end?"));
+  Serial.println(F("  ReadBand: Why the end?"));
+  return false;
 }
 
 byte FreqToBand(unsigned int TargetFreq, boolean & HamBand) {

@@ -2,8 +2,8 @@
 boolean SetAutoAntenna(int AntennaBand) {
   //SetAutoAntenna uses CurrentBand Values
   //  To change Antennas for each band, change HERE!!!
-  //   Returns false if it passes
-  boolean Valid = false;
+  //   Returns true if it passes
+  boolean Valid = true;
   String Antenna;
   Clear_Outputs();
 
@@ -41,7 +41,7 @@ boolean SetAutoAntenna(int AntennaBand) {
       }
     default: {
         // if nothing else matches, do the default
-        Valid = true;
+        Valid = false;
         break;
       }
   }

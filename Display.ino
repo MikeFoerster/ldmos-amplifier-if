@@ -88,6 +88,15 @@ void UpdateDisplay(byte Mode, int CurrentBand, int Fwd, int Ref, float SWR, floa
       }
 
     case ModeReceive: {
+        //Used to change between the AmpTemp and the Id Time.
+        gbRecieveOnly = false; //Clear the gbRecieveOnly Flag so we don't return to it exiting the Setup.
+        static byte Increment;
+        if (bID_Timer) {
+          if (Increment < 20) Increment++;
+          else Increment = 0;
+        }
+        else Increment = 0;
+
         //Normal Temp, use "Receive ", OverTemp use "AmpTemp ".
         if (AmpTemp < 108) Line1 = Line1 + "Receive ";
         else Line1 = Line1 + "AmpTemp ";
@@ -106,14 +115,52 @@ void UpdateDisplay(byte Mode, int CurrentBand, int Fwd, int Ref, float SWR, floa
           }
         }
 
-        //Line 2, Build the normal Recieve String:  Volts, AmpTemp, TimeRemaining... (char(223) is the Degree symbol)
-        if (AmpTemp < 100) {
-          Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+        //Change between the AmpTemp and the ID Time.
+        if (Increment <= 10) {
+          //Line 2, Build the normal Recieve String:  Volts, AmpTemp, TimeRemaining... (char(223) is the Degree symbol)
+          if (AmpTemp < 100) {
+            Line2 = String(Volts) +  "v  " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+          }
+          else {
+            //Keep the Minutes digits from dropping off when temp > 100:
+            Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
+          }                         // ^ removed a space
+        }
+        else {
+          //Line 2, Build the normal Recieve String:  Volts, IdTime, TimeRemaining... (char(223) is the Degree symbol)
+          if (bID_Min_Remaining < 10) {
+            Line2 = String(Volts) +  "v Id0" + String(bID_Min_Remaining) + " " + String(int(bHours));
+          }
+          else {
+            //Keep the Minutes digits from dropping off when temp > 100:
+            Line2 = String(Volts) +  "v Id" + String(bID_Min_Remaining) + " " + String(int(bHours));
+          }                         // ^ removed a space
+        }
+        if (bMinutes < 10) {
+          Line2 += ":0" + String(int(bMinutes));
+        }
+        else {
+          Line2 += ":" + String(int(bMinutes));
+        }
+        break;
+      }
+
+    case ModeReceiveOnly: {
+        //Used to change between the AmpTemp and the Id Time.
+        gbRecieveOnly = true; //Set the gbRecieveOnly Flag so we return to ModeRecieveOnly when exiting the Setup.
+        if (bID_Timer) {
+          //Line 2, Build the normal Recieve String:  Volts, IdTime, TimeRemaining... (char(223) is the Degree symbol)
+          if (bID_Min_Remaining < 10) {
+            Line2 = "       Id0" + String(bID_Min_Remaining) + " " + String(int(bHours));
+          }
+          else {
+            Line2 = "       Id" + String(bID_Min_Remaining) + " " + String(int(bHours));
+          }
         }
         else {
           //Keep the Minutes digits from dropping off when temp > 100:
-          Line2 = String(Volts) +  "v " + String(int(AmpTemp)) + char(223) + " " + String(int(bHours));
-        }                         // ^ removed a space
+          Line2 = "            " + String(int(bHours));
+        }
         if (bMinutes < 10) {
           Line2 += ":0" + String(int(bMinutes));
         }
@@ -215,6 +262,16 @@ void UpdateDisplay(byte Mode, int CurrentBand, int Fwd, int Ref, float SWR, floa
         int AiMode = EEPROMReadInt(iAI2Mode);
         Line1 = Line1 + "Set AI2 Mode";
         Line2 = "Value: " + String(AiMode) + "  Up/Dn ";
+        break;
+      }
+    case ModeSetupIdTimer: {
+        Line1 = Line1 + "Setup IdTmr";
+        if (bID_Timer) {
+          Line2 = "On  (Up/Dn Keys)";
+        }
+        else {
+          Line2 = "Off (Up/Dn Keys)";
+        }
         break;
       }
     case ModeSetupManualBand: {

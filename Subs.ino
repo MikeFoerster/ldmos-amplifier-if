@@ -10,7 +10,7 @@ void SubPowerTurnedOn(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber, b
   else AI2Mode = false;
 
   //Attempt to establish communications with the radio (either K3 or KX3)
-  ErrorString = PowerUpRoutine(AI2Mode, CurrentBand, RigPortNumber, RigModel, Act_Byp);
+  ErrorString = PowerUpRoutine(AI2Mode, CurrentBand, RigPortNumber, RigModel);
   if (ErrorString != "") {
     //We have some Error.  Change to ModeError and return.
     Mode = ModeError;
@@ -25,9 +25,7 @@ void SubPowerTurnedOn(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber, b
     Act_Byp = true;
     Bypass(Act_Byp);
   }
-  else {
-    Mode = ModeReceive;
-  }
+  else            Mode = ModeReceive;
   //Initialize the Time:
   bHours = EEPROMReadInt(iHoursEeprom);
   bMinutes = 0;
@@ -59,14 +57,14 @@ void SubPowerTurnedOn(boolean &AI2Mode, int &CurrentBand, byte &RigPortNumber, b
 void SubPrepareOff(byte &Mode, byte RigPortNumber, byte &RigModel) {
 
   //Run the RigPowerDownRoutine to as to turn rig off (in PowerUpDown tab).
-  RigPowerDownRoutine(RigPortNumber, RigModel);
+  RigPowerDownRoutine(RigPortNumber, RigModel, Mode);
 
   //Power the amp off, but allow the CoolDown mode
   // Will set to either ModeCoolDown or ModeOff
   AmpOffRoutine(Mode);
 }
 
-void SubCoolDown(byte &Mode) {
+void SubCoolDown(byte &Mode, boolean &PwrOff) {
   //Read the amplifier temp.
   double AmpTemp = ReadAmpTemp();
 
@@ -81,26 +79,34 @@ void SubCoolDown(byte &Mode) {
     analogWrite(iFanOutputPin, 0);
 
     //Turn Off Power to the Amp.
+    Serial.println(F("5. PowerSwitchPin = OFF"));
     digitalWrite(PowerSwitchPin, OFF);
-
+    //Set the flag to indicate we have powered down...
+    PwrOff = true;
+    Serial.print(F(" OFF FLAG SET in SubCoolDown, Mode  = ")); Serial.println(Mode);
+    
     //Power Down Message
     String Line1 = "Final Power OFF ";
     String Line2 = "                ";
-    lcd.setCursor(0, 0);
-    lcd.print(Line1);
-    lcd.setCursor(0, 1);
-    lcd.print(Line2);
-    delay(2000);
+    delay(500);
 
-    //Turn off the display.
-    lcd.setCursor(0, 0);
-    lcd.clear();
-    lcd.setBacklight(0);
-    lcd.noDisplay();
-    delay(100);  //Not sure if this is needed at all... (was 1 sec.)
+    if (Mode != ModeReceiveOnly) {
+      lcd.setCursor(0, 0);
+      lcd.print(Line1);
+      lcd.setCursor(0, 1);
+      lcd.print(Line2);
+      delay(2000);
 
-    //Set the Mode to ModeOff
-    Mode = ModeOff;
+      //Turn off the display.
+      lcd.setCursor(0, 0);
+      lcd.clear();
+      lcd.setBacklight(0);
+      lcd.noDisplay();
+      delay(100);  //Not sure if this is needed at all... (was 1 sec.)
+
+      //Set the Mode to ModeOff
+      Mode = ModeOff;
+    }
   }
 }
 

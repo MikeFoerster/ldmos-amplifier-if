@@ -31,6 +31,7 @@ String Serial3Read(boolean Wait) {
   String Return = "";
 
   if (Wait) {
+    //unsigned long StartWait = millis();
     do {
       //If the TX pin is active, interrupt the read or we will timeout 
       if (gTxFlag) break;
@@ -38,6 +39,7 @@ String Serial3Read(boolean Wait) {
       delay(10);
       Count++;
     } while ((Serial3.available() == 0) && (Count < 100));
+    //Serial.print(F("      BT Run Time = ")); Serial.print(millis() - StartWait); Serial.println();
   }
 
   if (Serial3.available()) {

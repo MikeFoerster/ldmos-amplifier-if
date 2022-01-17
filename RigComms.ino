@@ -99,25 +99,32 @@ unsigned int ReadFrequencyFromFA(String CommsString) {
 }
 
 
-byte GetRigModel(byte RigPortNumber) {
+byte GetRigModel(byte RigPortNumber, byte &Version) {
 
-  if (RigPortNumber == 3) {  //Test for IC-705:
-    String Freq = Serial3Cmd("freq");
-    if (Freq.toInt() > 255) {
-      return 3; //Returns 3 if comms is established
+  if (RigPortNumber <=2) {  //Port 1 or 1
+    String Model = RadioCommandResponse("OM;", RigPortNumber);
+    if (Model.indexOf("X") > -1) {
+      //int Xval = Model.indexOf("X");
+      return 1;
+    }
+    else if (Model.indexOf("B") > -1) {
+      return 2;
+    }
+    else {
+      return 0;
     }
   }
-
-  String Model = RadioCommandResponse("OM;", RigPortNumber);
-  if (Model.indexOf("X") > -1) {
-    //int Xval = Model.indexOf("X");
-    return 1;
-  }
-  else if (Model.indexOf("B") > -1) {
-    return 2;
-  }
-  else {
-    return 0;
+  
+  else { //RigPortNumber 3  //Test for IC-705:
+    String sVersion = Serial3Cmd("vers");
+    if (sVersion.length() == 6)  {  //Comms sometimes screws up and adds in some extra characters that mess up the decode.  Don't even have to check for: if (sBand != "")
+      Version = sVersion.substring(4, 6).toInt();
+      if ((Version > 10) && (Version < 100)) {
+        return 3; //Returns 3 for ICOM if comms is established
+      }
+      else return 0;
+      }
+      else return 0;
   }
 }
 
@@ -290,7 +297,6 @@ boolean SetPower(byte PowerValue, byte RigPortNumber) {
 
     if (PowerResponse != PowerValue) {
       //Command Failed to set the correct value
-      Serial.println(F("    #### COMPLETE (Failed) SetPower")); Serial.println();
       return true;
     }
     return false;
@@ -319,8 +325,31 @@ boolean SetAiOnOff(byte ZeroOr2, byte RigPortNumber) {
       return false;
     }
     else {
-      Serial.println(F("    #### FAILED CIV_Transceive_On_Off")); Serial.println();
-      return true;
+      //FIX THIS SOMETIME!!!  Too much code!!!
+      //Failed, try Re-Reading the Tranceive Value:
+      String AskAgain = Serial3Cmd("tnsc");
+      Serial.print(F(" AskAgain returned: ")); Serial.println(AskAgain);
+      //Response should be "tnsc0" for OFF, or "tnsc1" for ON.
+      if (ZeroOr2 == 0) {
+        if (AskAgain == "tnsc0") {
+           //Passed
+           return false;
+        }
+        else {
+          //Failed
+          return true;
+        }
+      }
+      else {
+        if (AskAgain == "tnsc1") {
+            //Passed
+            return false;
+        }
+        else {
+          //Failed
+          return true;
+        }
+      }
     }
   }
 

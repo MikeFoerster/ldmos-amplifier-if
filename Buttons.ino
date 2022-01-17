@@ -63,6 +63,18 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             Mode = ModeSetupBandPower;
             break;
           }
+        case ModeReceiveOnly: {
+            //Select button pressed while in ModeReceiveOnly, Change to ModeSetupBandPower:
+
+            //This function just READs the current setting and displays ONLY the Error Messages such as "Already Max Power"
+            //  on the second line while in the ModeSetupBandPower mode.
+            // Current Setting stored in Eeprom.  Max Power allowed per band is hard coded.
+            byte Read = 1;
+            PowerSetting = BumpPowerSetting(Read, CurrentBand);
+            StartSetting = PowerSetting;
+            Mode = ModeSetupBandPower;
+            break;
+          }
 
         //        case ModeManual: {
         //            //Select button pressed while in Manual Mode, Change to ModeSetupTimeout:
@@ -127,10 +139,15 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
         case ModeSetupAi2Mode: {
             //Select Key, we are in ModeSetupAi2Mode, change to ModeSetupAntenna.
             //Change Modes:
-            Mode = ModeSetupAntenna;
+            Mode = ModeSetupIdTimer;
             break;
           }
 
+        case ModeSetupIdTimer: {
+            //Select Key, we are in the ModeSetupIdTimer, change to ModeSetupAntenna
+            Mode = ModeSetupAntenna;
+            break;
+          }
         case ModeSetupAntenna: {
             //Select Key, we are in ModeSetupAntenna, change to:
             // if gManual set: ModeManual
@@ -144,7 +161,10 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
               //CurrentBand = EEPROMReadInt(iManBand);  I don't think this is needed!
               Mode = ModeSetupManualBand;
             }
-            else Mode = ModeReceive;
+            else {
+              if (gbRecieveOnly) Mode = ModeReceiveOnly;
+              else Mode = ModeReceive;
+            }
             break;
           }
 
@@ -153,8 +173,9 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             //Before Reseting back to ModeManual, write the Manual CurrentBand to Eeprom
             EEPROMWriteInt(iManBand, CurrentBand);
 
-            //Reset back to Recieve Mode:
-            Mode = ModeReceive;
+            //Reset back to Recieve(Only) Mode:
+            if (gbRecieveOnly) Mode = ModeReceiveOnly;
+            else Mode = ModeReceive;
             break;
           }
       } //End of switch Mode
@@ -209,6 +230,11 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             EEPROMWriteInt(iAI2Mode, 1);
             AI2Mode = EEPROMReadInt(iAI2Mode);
             SetAiOnOff(AI2Mode, RigPortNumber);  //Update the mode to the rig.
+            break;
+          }
+        case ModeSetupIdTimer: {
+            //Up Key, we are in the ModeSetupIdTimer, Turn the ID Timer On.
+            ToggleIdTimer(true);
             break;
           }
         case ModeSetupAntenna: {
@@ -266,6 +292,11 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             SetAiOnOff(AI2Mode, RigPortNumber);  //Update the mode to the rig.
             break;
           }
+        case ModeSetupIdTimer: {
+            //Down Key, we are in the ModeSetupIdTimer, Turn the ID Timer Off.
+            ToggleIdTimer(false);
+            break;
+          }
         case ModeSetupAntenna: {
             AntennaSwitch = ManualBandIncDec(false); //False will Decrement by 1
             break;
@@ -283,7 +314,15 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
     //LEFT
     if (buttons & BUTTON_LEFT) {
       switch (Mode) {
-        case ModeOff: {
+        case ModeReceive:
+        case ModeReceiveOnly: {
+            if (bID_Timer == true) {
+              //Reset the timer for the next 10 minutes
+              lID_Time = millis() - 100;  //Set the ID time to where it will ID and reset itself!
+            }
+            break;
+          }
+        case ModePrepareOff: {
             //Use the CurrentBand set to 200 to indicate to NOT turn off the Rig in "Subs".
             CurrentBand = 200;
             break;
@@ -311,6 +350,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
 
             //We need to take care of some of the stuff from the Power Up routines
             //Turn the power on to the Amplifier
+            Serial.println(F("1. PowerSwitchPin = ON"));
             digitalWrite(PowerSwitchPin, ON);
             delay(2000);  //Allow time for the Power Supply to come up to voltage.
             // (Occasionally get a beep from the "Display" check if not long enough.)
@@ -319,6 +359,7 @@ void HandleButtons(byte &Mode, byte RigPortNumber, int &CurrentBand, byte &bHour
             float Volts = ReadVoltage();
             if (Volts < 30) {
               //Power Up FAILED, turn the power pin back off.
+              Serial.println(F("2. PowerSwitchPin = OFF"));
               digitalWrite(PowerSwitchPin, OFF);
               //return "50 Volt Fail";  //Sets ErrorString and ModeError.
             }
